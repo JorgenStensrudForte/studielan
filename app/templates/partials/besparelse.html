@@ -1,0 +1,28 @@
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <div class="flex items-center justify-between mb-1">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Merkostnad ved binding</h2>
+        <span class="text-xs text-gray-500">ved {{ "{:,.0f}".format(loan_amount).replace(",", " ") }} kr</span>
+    </div>
+    <p class="text-xs text-gray-600 mb-4">Forutsetter at flytende rente holder seg på dagens nivå hele perioden</p>
+    {% if savings %}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {% for s in savings %}
+        <div class="bg-gray-800/50 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Fast {{ s.tenor }}</p>
+            <p class="text-lg font-mono font-semibold
+                {% if s.annual_diff > 0 %}text-red-400{% elif s.annual_diff < 0 %}text-emerald-400{% else %}text-gray-300{% endif %}">
+                {{ "{:+,.0f}".format(s.annual_diff).replace(",", " ") }} kr/år
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+                {{ "{:+,.0f}".format(s.total_diff).replace(",", " ") }} kr over {{ s.years }} år
+            </p>
+            <p class="text-xs text-gray-600 mt-1">
+                {{ "%.3f"|format(s.fixed_rate) }}% fast vs {{ "%.3f"|format(s.floating_rate) }}% flyt.
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-500 text-sm">Ingen beregninger tilgjengelig</p>
+    {% endif %}
+</div>

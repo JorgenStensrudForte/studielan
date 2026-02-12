@@ -1,0 +1,97 @@
+<!-- Overall recommendation -->
+<div class="rounded-xl border p-5 mb-4
+    {% if signal.color == 'green' %}bg-emerald-900/30 border-emerald-700/50
+    {% elif signal.color == 'yellow' %}bg-yellow-900/30 border-yellow-700/50
+    {% else %}bg-red-900/30 border-red-700/50{% endif %}">
+    <div class="flex items-center gap-3 mb-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wider
+            {% if signal.color == 'green' %}text-emerald-400
+            {% elif signal.color == 'yellow' %}text-yellow-400
+            {% else %}text-red-400{% endif %}">
+            Vurdering
+        </h2>
+        <span class="text-xl font-bold
+            {% if signal.color == 'green' %}text-emerald-300
+            {% elif signal.color == 'yellow' %}text-yellow-300
+            {% else %}text-red-300{% endif %}">
+            {{ signal.recommendation }}
+        </span>
+    </div>
+    <ul class="space-y-1">
+        {% for reason in signal.reasons %}
+        <li class="text-sm text-gray-300 flex items-start gap-2">
+            <span class="text-gray-600 mt-0.5">&bull;</span>
+            {{ reason }}
+        </li>
+        {% endfor %}
+    </ul>
+
+    {% if not has_swap_history %}
+    <p class="mt-3 text-xs text-amber-400/70">
+        Merk: Ingen swap-historikk tilgjengelig. Trend-analyse er begrenset.
+        Bruk «Bootstrap Cbonds» eller vent til nok daglige SEB-datapunkter er samlet.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Per-tenor breakdown -->
+{% if signal.per_tenor %}
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Sammenligning per bindingsperiode</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {% for ts in signal.per_tenor %}
+        <div class="rounded-lg p-3 border
+            {% if ts.color == 'green' %}bg-emerald-900/20 border-emerald-800/50
+            {% elif ts.color == 'yellow' %}bg-yellow-900/20 border-yellow-800/50
+            {% else %}bg-gray-800/50 border-gray-700/50{% endif %}">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium text-white">{{ ts.tenor }}</span>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full
+                    {% if ts.color == 'green' %}bg-emerald-800/50 text-emerald-300
+                    {% elif ts.color == 'yellow' %}bg-yellow-800/50 text-yellow-300
+                    {% else %}bg-gray-700/50 text-gray-400{% endif %}">
+                    {{ ts.recommendation }}
+                </span>
+            </div>
+
+            <div class="space-y-1 text-xs">
+                {% if ts.spread is not none %}
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Spread:</span>
+                    <span class="font-mono
+                        {% if ts.spread < 0 %}text-emerald-400{% elif ts.spread > 0.20 %}text-red-400{% else %}text-gray-300{% endif %}">
+                        {{ "%+.3f"|format(ts.spread) }}pp
+                    </span>
+                </div>
+                {% endif %}
+
+                {% if ts.swap_trend is not none %}
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Swap-trend ({{ ts.swap_trend_days }}d):</span>
+                    <span class="font-mono
+                        {% if ts.swap_trend < -0.10 %}text-emerald-400{% elif ts.swap_trend > 0.10 %}text-red-400{% else %}text-gray-300{% endif %}">
+                        {{ "%+.2f"|format(ts.swap_trend) }}pp
+                    </span>
+                </div>
+                {% endif %}
+
+                {% if ts.estimated_next is not none %}
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Est. neste LK:</span>
+                    <span class="font-mono text-gray-300">{{ "%.3f"|format(ts.estimated_next) }}%</span>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if ts.reasons %}
+            <div class="mt-2 pt-2 border-t border-gray-700/30">
+                {% for r in ts.reasons[:2] %}
+                <p class="text-xs text-gray-500 leading-tight {% if not loop.first %}mt-1{% endif %}">{{ r }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,14 @@
+{$DOMAIN:localhost} {
+    route /health {
+        reverse_proxy backend:8000
+    }
+
+    route * {
+        basic_auth {
+            {$AUTH_USER:admin} {$AUTH_HASH}
+        }
+        reverse_proxy backend:8000
+    }
+
+    encode gzip
+}

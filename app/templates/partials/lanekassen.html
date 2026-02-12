@@ -1,0 +1,58 @@
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Lånekassen</h2>
+        {% if lanekassen %}
+        <span class="text-xs text-gray-500">{{ lanekassen.period }}</span>
+        {% endif %}
+    </div>
+    {% if lanekassen %}
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="text-gray-500 text-xs">
+                <th class="text-left pb-2">Type</th>
+                <th class="text-right pb-2">Rente</th>
+                <th class="text-right pb-2">Spread</th>
+            </tr>
+        </thead>
+        <tbody class="text-gray-200">
+            <tr class="border-t border-gray-800/50">
+                <td class="py-2">Flytende</td>
+                <td class="text-right font-mono font-medium">{{ "%.3f"|format(lanekassen.floating) }}%</td>
+                <td class="text-right text-gray-500">&mdash;</td>
+            </tr>
+            {% if lanekassen.fixed_3y is not none %}
+            <tr class="border-t border-gray-800/50">
+                <td class="py-2">Fast 3 år</td>
+                <td class="text-right font-mono font-medium">{{ "%.3f"|format(lanekassen.fixed_3y) }}%</td>
+                <td class="text-right font-mono text-sm
+                    {% if lanekassen.fixed_3y < lanekassen.floating %}text-emerald-400{% else %}text-red-400{% endif %}">
+                    {{ "%+.3f"|format(lanekassen.fixed_3y - lanekassen.floating) }}
+                </td>
+            </tr>
+            {% endif %}
+            {% if lanekassen.fixed_5y is not none %}
+            <tr class="border-t border-gray-800/50">
+                <td class="py-2">Fast 5 år</td>
+                <td class="text-right font-mono font-medium">{{ "%.3f"|format(lanekassen.fixed_5y) }}%</td>
+                <td class="text-right font-mono text-sm
+                    {% if lanekassen.fixed_5y < lanekassen.floating %}text-emerald-400{% else %}text-red-400{% endif %}">
+                    {{ "%+.3f"|format(lanekassen.fixed_5y - lanekassen.floating) }}
+                </td>
+            </tr>
+            {% endif %}
+            {% if lanekassen.fixed_10y is not none %}
+            <tr class="border-t border-gray-800/50">
+                <td class="py-2">Fast 10 år</td>
+                <td class="text-right font-mono font-medium">{{ "%.3f"|format(lanekassen.fixed_10y) }}%</td>
+                <td class="text-right font-mono text-sm
+                    {% if lanekassen.fixed_10y < lanekassen.floating %}text-emerald-400{% else %}text-red-400{% endif %}">
+                    {{ "%+.3f"|format(lanekassen.fixed_10y - lanekassen.floating) }}
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-gray-500 text-sm">Kunne ikke hente data fra Lånekassen</p>
+    {% endif %}
+</div>

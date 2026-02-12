@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="nb" class="bg-gray-950 text-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studielån - Bør du binde renta?</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+        .htmx-request .htmx-indicator { opacity: 1; }
+        .htmx-request.htmx-indicator { opacity: 1; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#f0f7ff', 100: '#e0effe', 200: '#bae0fd', 300: '#7cc8fb', 400: '#36adf6', 500: '#0c93e7', 600: '#0074c5', 700: '#015c9f', 800: '#064e83', 900: '#0b416d', 950: '#072a49' }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen bg-gray-950">
+    <div class="max-w-5xl mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

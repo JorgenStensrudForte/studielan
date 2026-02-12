@@ -1,0 +1,63 @@
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Topp 5 fastrente-banker per bindingsperiode</h2>
+        <span class="text-xs text-gray-500">Finansportalen</span>
+    </div>
+
+    {% if estimates %}
+    <!-- Estimated next LK rates -->
+    <div class="mb-4 bg-gray-800/50 rounded-lg p-3">
+        <p class="text-xs text-gray-500 mb-2 uppercase tracking-wider">Estimert neste Lånekassen-rente (snitt topp 5 &minus; 0,15pp)</p>
+        <div class="grid grid-cols-3 gap-3">
+            {% for est in estimates %}
+            <div>
+                <span class="text-xs text-gray-500">Fast {{ est.tenor }}</span>
+                <p class="font-mono font-medium text-white">{{ "%.3f"|format(est.estimated_lk) }}%</p>
+                {% if est.diff is not none %}
+                <p class="text-xs font-mono
+                    {% if est.diff > 0.01 %}text-red-400{% elif est.diff < -0.01 %}text-emerald-400{% else %}text-gray-500{% endif %}">
+                    {{ "%+.3f"|format(est.diff) }}pp vs nå
+                    {% if est.current_lk is not none %}({{ "%.3f"|format(est.current_lk) }}%){% endif %}
+                </p>
+                {% endif %}
+                <p class="text-xs text-gray-600 mt-0.5">basert på {{ est.bank_count }} banker</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if products_by_tenor %}
+    <!-- Per-tenor tables -->
+    {% for years in [3, 5, 10] %}
+    {% set products = products_by_tenor.get(years, []) %}
+    {% if products %}
+    <div class="{% if not loop.first %}mt-4 pt-4 border-t border-gray-800/50{% endif %}">
+        <p class="text-xs text-gray-500 mb-2 font-medium">Fast {{ years }} år</p>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-gray-500 text-xs">
+                    <th class="text-left pb-1">#</th>
+                    <th class="text-left pb-1">Bank</th>
+                    <th class="text-right pb-1">Nominell</th>
+                    <th class="text-right pb-1">Effektiv</th>
+                </tr>
+            </thead>
+            <tbody class="text-gray-200">
+                {% for product in products %}
+                <tr class="border-t border-gray-800/30">
+                    <td class="py-1.5 text-gray-500 text-xs">{{ loop.index }}</td>
+                    <td class="py-1.5 truncate max-w-[200px] text-xs" title="{{ product.bank }} - {{ product.product_name }}">{{ product.bank }}</td>
+                    <td class="text-right font-mono text-xs">{{ "%.2f"|format(product.nominal_rate) }}%</td>
+                    <td class="text-right font-mono text-xs font-medium">{{ "%.2f"|format(product.effective_rate) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% else %}
+    <p class="text-gray-500 text-sm">Kunne ikke hente bankdata fra Finansportalen</p>
+    {% endif %}
+</div>

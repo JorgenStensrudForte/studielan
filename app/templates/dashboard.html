@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="mb-8">
+    <h1 class="text-3xl font-bold text-white tracking-tight">Studielån <span class="text-brand-400">Rentekalkulator</span></h1>
+    <p class="text-gray-400 mt-1">Bør du binde renta på studielånet?</p>
+</header>
+
+<!-- Theory explainer -->
+<details class="mb-6 bg-gray-900 rounded-xl border border-gray-800 group">
+    <summary class="cursor-pointer p-4 flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-white select-none">
+        <svg class="w-4 h-4 transition-transform group-open:rotate-90 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        Hvordan fungerer dette? Teorien bak rentebinding
+    </summary>
+    <div class="px-5 pb-5 space-y-4 text-sm text-gray-400 leading-relaxed border-t border-gray-800 pt-4">
+        <div>
+            <h3 class="text-white font-semibold mb-1">Slik settes renta på studielånet</h3>
+            <p>Lånekassen beregner renta ut fra <strong class="text-gray-200">gjennomsnittet av de fem beste boliglånsrentene</strong> i markedet (fra Finansportalen), minus 0,15 prosentpoeng. Dette gjelder både flytende og fast rente.</p>
+            <ul class="mt-2 space-y-1 ml-4 list-disc text-gray-500">
+                <li><strong class="text-gray-300">Flytende rente:</strong> Observasjonsperiode 2 mnd + 2 mnd opphold. Renta fra januar er basert på september&ndash;oktober.</li>
+                <li><strong class="text-gray-300">Fast rente:</strong> Observasjonsperiode 1 mnd + 1 mnd opphold. Kortere forsinkelse enn flytende.</li>
+            </ul>
+        </div>
+
+        <div>
+            <h3 class="text-white font-semibold mb-1">Bindingsperioder og søknadsvindu</h3>
+            <p>Du kan binde renta i <strong class="text-gray-200">3, 5 eller 10 år</strong>. Søknadsvinduet er åpent 10.&ndash;17. annenhver måned (feb, apr, jun, aug, okt, des). Renta du får er allerede fastsatt &mdash; du velger bare om du vil ta den.</p>
+        </div>
+
+        <div>
+            <h3 class="text-white font-semibold mb-1">Strategien: Hvorfor binde når fastrenta er dyrere?</h3>
+            <p>Normalt er fastrenta <em>litt høyere</em> enn flytende (spreaden er typisk 0,05&ndash;0,15 prosentpoeng). Det er prisen for forutsigbarhet. Men her er logikken bak &laquo;gamblingen&raquo;:</p>
+            <ol class="mt-2 space-y-2 ml-4 list-decimal">
+                <li>
+                    <strong class="text-gray-200">Du tror flytende rente vil stige</strong> &mdash; Norges Bank kan heve styringsrenta, eller bankene øker marginene. Da vil Lånekassens flytende rente følge etter (med 4 mnd forsinkelse).
+                </li>
+                <li>
+                    <strong class="text-gray-200">Swap-renter viser markedets forventning</strong> &mdash; Swap-renter (f.eks. 3-års NOK swap) reflekterer hva markedet tror om fremtidige korte renter. Hvis swap-renta faller, forventer markedet rentenedgang. Hvis den stiger, forventes oppgang.
+                </li>
+                <li>
+                    <strong class="text-gray-200">Spreaden kan bli negativ</strong> &mdash; I sjeldne tilfeller kan fastrenta faktisk bli <em>lavere</em> enn flytende. Dette skjer fordi fast og flytende rente har ulike observasjonsperioder og reagerer på ulike deler av rentekurven. Da er det en &laquo;gratis lunsj&raquo;.
+                </li>
+                <li>
+                    <strong class="text-gray-200">Du kan bryte avtalen</strong> &mdash; Du kan si opp fastrenteavtalen i neste søknadsvindu. Kostnad: rentetap/rentegevinst beregnes slik at hverken du eller Lånekassen tjener på bruddet. Etter oppsigelse må du ha flytende i minst 2 måneder.
+                </li>
+            </ol>
+        </div>
+
+        <div>
+            <h3 class="text-white font-semibold mb-1">Hva dashboardet hjelper deg med</h3>
+            <ul class="space-y-1 ml-4 list-disc text-gray-500">
+                <li><strong class="text-gray-300">Lånekassen-panelet:</strong> Viser gjeldende renter og spreaden mellom fast og flytende.</li>
+                <li><strong class="text-gray-300">Swap-renter (SEB):</strong> Live markedsrenter som indikerer forventet renteutvikling. Faller de? Da kan det lønne seg å vente.</li>
+                <li><strong class="text-gray-300">Banker (Finansportalen):</strong> Topp 5 fastrente-tilbud per bindingsperiode &mdash; disse driver Lånekassens neste rentefastsettelse.</li>
+                <li><strong class="text-gray-300">Estimert neste LK-rente:</strong> Beregnet fra bankrentene (snitt topp 5 &minus; 0,15pp).</li>
+                <li><strong class="text-gray-300">Besparelse:</strong> Merkostnad ved å binde vs. flytende ved dagens renter.</li>
+                <li><strong class="text-gray-300">Vurdering per tenor:</strong> Sammenligning av 3, 5 og 10 år med anbefaling for hver.</li>
+            </ul>
+        </div>
+
+        <div class="text-xs text-gray-600 pt-2 border-t border-gray-800/50">
+            Kilde: <a href="https://lanekassen.no/nb-NO/gjeld-og-betaling/renter-og-gebyrer/" class="underline hover:text-gray-400">Lånekassen &mdash; Renter og gebyrer</a> |
+            <a href="https://lanekassen.no/nb-NO/gjeld-og-betaling/renter-og-gebyrer/avbryte-fastrenteavtale/" class="underline hover:text-gray-400">Avbryte fastrenteavtale</a> |
+            <a href="https://www.smartepenger.no/lan/314-renter-og-tilbakebetaling-i-lanekassen" class="underline hover:text-gray-400">Smartepenger</a>
+        </div>
+    </div>
+</details>
+
+<!-- Loan amount input -->
+<div class="mb-6 flex items-center gap-4 bg-gray-900 rounded-xl p-4 border border-gray-800">
+    <label for="belop" class="text-sm font-medium text-gray-300 whitespace-nowrap">Lånebeløp:</label>
+    <input
+        type="number"
+        id="belop"
+        name="belop"
+        value="{{ loan_amount }}"
+        step="10000"
+        min="50000"
+        max="5000000"
+        class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white w-40 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+        hx-get="/partials/besparelse"
+        hx-trigger="change, keyup changed delay:500ms"
+        hx-target="#besparelse-panel"
+        hx-include="this"
+    >
+    <span class="text-gray-400 text-sm">kr</span>
+    <span class="text-gray-500 text-sm ml-auto">{{ today.strftime('%d. %b %Y') }}</span>
+</div>
+
+<!-- Application window banner -->
+{% if current_window %}
+<div class="mb-6 bg-emerald-900/40 border border-emerald-700/50 rounded-xl p-4 flex items-center gap-3">
+    <span class="text-2xl">&#x1f7e2;</span>
+    <div>
+        <p class="font-semibold text-emerald-300">Søknadsvindu er ÅPENT!</p>
+        <p class="text-emerald-400/80 text-sm">{{ current_window[0].strftime('%d.') }}&ndash;{{ current_window[1].strftime('%d. %B %Y') }} &mdash; Du kan søke om fast rente nå</p>
+    </div>
+</div>
+{% else %}
+<div class="mb-6 bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-3">
+    <span class="text-xl text-gray-500">&#x1f551;</span>
+    <p class="text-gray-400 text-sm">Neste søknadsvindu: <span class="text-white font-medium">{{ next_window[0].strftime('%d.') }}&ndash;{{ next_window[1].strftime('%d. %B %Y') }}</span>
+        {% if days_to_window > 0 %}<span class="text-gray-500">(om {{ days_to_window }} dager)</span>{% endif %}
+    </p>
+</div>
+{% endif %}
+
+<!-- Bootstrap warning -->
+{% if not has_swap_history %}
+<div class="mb-4 bg-amber-900/30 border border-amber-700/50 rounded-xl p-4 text-sm text-amber-300">
+    <strong>Mangler swap-historikk.</strong> Trend-analyse krever historiske data.
+    <button class="ml-2 underline hover:text-amber-100"
+            hx-post="/api/bootstrap"
+            hx-swap="outerHTML"
+            hx-target="closest div">
+        Last ned historikk fra Cbonds
+    </button>
+</div>
+{% endif %}
+
+<!-- Main grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <!-- Lånekassen -->
+    <div id="lanekassen-panel"
+         hx-get="/partials/lanekassen"
+         hx-trigger="every 300s"
+         hx-swap="innerHTML">
+        {% include "partials/lanekassen.html" %}
+    </div>
+
+    <!-- Swap rates -->
+    <div id="swap-panel"
+         hx-get="/partials/swap"
+         hx-trigger="every 60s"
+         hx-swap="innerHTML">
+        {% include "partials/swap_rates.html" %}
+    </div>
+</div>
+
+<!-- Bank products per tenor + estimates -->
+<div id="banker-panel"
+     class="mb-4"
+     hx-get="/partials/banker"
+     hx-trigger="every 300s"
+     hx-swap="innerHTML">
+    {% include "partials/banker.html" %}
+</div>
+
+<!-- Savings -->
+<div id="besparelse-panel" class="mb-4">
+    {% include "partials/besparelse.html" %}
+</div>
+
+<!-- Recommendation -->
+<div id="vurdering-panel"
+     hx-get="/partials/vurdering"
+     hx-trigger="every 60s"
+     hx-swap="innerHTML">
+    {% include "partials/vurdering.html" %}
+</div>
+
+<footer class="mt-8 text-center text-gray-600 text-xs">
+    <p>Data fra Lånekassen, SEB, Finansportalen og Cbonds. Ingen finansiell rådgivning.</p>
+</footer>
+{% endblock %}
