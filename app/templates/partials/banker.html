@@ -53,6 +53,27 @@
                 </tr>
                 {% endfor %}
             </tbody>
+            <tfoot>
+                {% set ns = namespace(sum_eff=0, sum_nom=0) %}
+                {% for product in products %}
+                    {% set ns.sum_eff = ns.sum_eff + product.effective_rate %}
+                    {% set ns.sum_nom = ns.sum_nom + product.nominal_rate %}
+                {% endfor %}
+                {% set avg_eff = ns.sum_eff / products|length %}
+                {% set avg_nom = ns.sum_nom / products|length %}
+                <tr class="border-t-2 border-gray-700">
+                    <td class="py-1.5 text-xs"></td>
+                    <td class="py-1.5 text-xs text-gray-400 font-medium">Snitt topp {{ products|length }}</td>
+                    <td class="text-right font-mono text-xs text-gray-400">{{ "%.2f"|format(avg_nom) }}%</td>
+                    <td class="text-right font-mono text-xs text-gray-400 font-medium">{{ "%.2f"|format(avg_eff) }}%</td>
+                </tr>
+                <tr class="border-t border-gray-800/30">
+                    <td class="py-1.5 text-xs"></td>
+                    <td class="py-1.5 text-xs text-emerald-400 font-medium">Snitt &minus; 0,15pp</td>
+                    <td class="text-right font-mono text-xs text-emerald-400">{{ "%.2f"|format(avg_nom - 0.15) }}%</td>
+                    <td class="text-right font-mono text-xs text-emerald-400 font-medium">{{ "%.2f"|format(avg_eff - 0.15) }}%</td>
+                </tr>
+            </tfoot>
         </table>
     </div>
     {% endif %}
