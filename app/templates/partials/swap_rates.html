@@ -39,7 +39,7 @@
     {% if has_history %}
     <div class="mt-4 bg-gray-800/50 rounded-lg p-4">
         <p class="text-xs text-gray-500 mb-2">Swap-renter siste 90 dager</p>
-        <canvas id="swap-history-chart" height="180"></canvas>
+        <canvas id="swap-history-chart"></canvas>
     </div>
     <script>
     (function() {
@@ -72,7 +72,7 @@
                 data: { datasets },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    aspectRatio: 2.2,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { labels: { boxWidth: 12, font: { size: 11 } } },
