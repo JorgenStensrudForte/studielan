@@ -39,6 +39,7 @@ class EstimatedRate:
     current_lk: float | None  # nåværende Lånekassen-rente for denne tenoren
     diff: float | None  # estimated_lk - current_lk (positiv = renta forventes opp)
     bank_count: int = 0  # antall banker i grunnlaget
+    std_dev: float = 0.0  # standardavvik i topp-5 bankrenter (spredning)
 
 
 @dataclass

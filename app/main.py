@@ -34,6 +34,25 @@ app = FastAPI(title="Studielån Rentekalkulator", lifespan=lifespan)
 
 # --- Helpers ---
 
+def _estimate_risk(est: EstimatedRate, years: int) -> str:
+    """Data-driven risk: bank rate spread + sample size + tenor length."""
+    score = 0
+    # Spredning i bankrenter (høy std_dev = usikkert estimat)
+    if est.std_dev > 0.25:
+        score += 2
+    elif est.std_dev > 0.10:
+        score += 1
+    # Få banker i grunnlaget = mindre pålitelig
+    if est.bank_count < 3:
+        score += 2
+    elif est.bank_count < 5:
+        score += 1
+    # Lengre binding = mer kan endre seg
+    if years >= 10:
+        score += 1
+    return "lav" if score <= 1 else "middels" if score <= 3 else "høy"
+
+
 def _compute_savings(
     lk: LanekassenRate,
     loan_amount: int,
@@ -45,7 +64,6 @@ def _compute_savings(
     Negative diff = next rate LOWER → waiting saves money.
     """
     est_by_label = {e.tenor: e for e in estimates}
-    risk_map = {3: "lav", 5: "middels", 10: "høy"}
     results = []
     for attr, tenor_key in TENOR_ATTRS:
         fixed = getattr(lk, attr)
@@ -66,7 +84,7 @@ def _compute_savings(
             total_diff=round(annual_diff * years),
             years=years,
             bind_now=annual_diff > 0,
-            risk=risk_map.get(years, "middels"),
+            risk=_estimate_risk(est, years),
         ))
     return results
 
@@ -374,7 +392,7 @@ async def api_dashboard(belop: int = Query(default=settings.default_loan_amount)
         },
         "estimates": [
             {"tenor": e.tenor, "avg_top5": e.avg_top5, "estimated_lk": e.estimated_lk,
-             "current_lk": e.current_lk, "diff": e.diff}
+             "current_lk": e.current_lk, "diff": e.diff, "std_dev": e.std_dev}
             for e in data["estimates"]
         ],
         "savings": [

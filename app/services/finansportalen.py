@@ -1,3 +1,5 @@
+import statistics
+
 import httpx
 
 from app.config import settings
@@ -84,8 +86,10 @@ def estimate_next_lk_rates(
         if not top5:
             continue
 
-        avg = sum(p.effective_rate for p in top5) / len(top5)
+        rates = [p.effective_rate for p in top5]
+        avg = sum(rates) / len(rates)
         estimated_lk = round(avg - settings.lanekassen_margin, 3)
+        std_dev = round(statistics.stdev(rates), 3) if len(rates) >= 2 else 0.0
 
         current = None
         if current_lk:
@@ -100,6 +104,7 @@ def estimate_next_lk_rates(
             current_lk=current,
             diff=diff,
             bank_count=len(top5),
+            std_dev=std_dev,
         ))
 
     return estimates
