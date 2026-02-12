@@ -4,10 +4,15 @@ services:
     restart: unless-stopped
     expose:
       - "80"
-    environment:
-      - SERVICE_FQDN_CADDY=${SERVICE_FQDN_CADDY}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.studielan.rule=Host(`studielan.77.42.36.80.nip.io`)"
+      - "traefik.http.routers.studielan.entrypoints=http,https"
+      - "traefik.http.routers.studielan.tls=true"
+      - "traefik.http.routers.studielan.tls.certresolver=letsencrypt"
+      - "traefik.http.services.studielan.loadbalancer.server.port=80"
     depends_on:
       - backend
 
