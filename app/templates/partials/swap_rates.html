@@ -21,121 +21,17 @@
                 <td class="py-2">{{ rate.tenor }}</td>
                 <td class="text-right font-mono font-medium">{{ "%.2f"|format(rate.rate) }}%</td>
                 <td class="text-right font-mono text-sm
-                    {% if rate.change_today < 0 %}text-emerald-400{% elif rate.change_today > 0 %}text-red-400{% else %}text-gray-500{% endif %}">
+                    {% if rate.change_today > 0 %}text-emerald-400{% elif rate.change_today < 0 %}text-red-400{% else %}text-gray-500{% endif %}">
                     {% if rate.change_today != 0 %}{{ "%+.2f"|format(rate.change_today) }}{% else %}&mdash;{% endif %}
                 </td>
                 <td class="text-right font-mono text-sm
-                    {% if change_90d < -0.05 %}text-emerald-400{% elif change_90d > 0.05 %}text-red-400{% else %}text-gray-500{% endif %}">
+                    {% if change_90d > 0.05 %}text-emerald-400{% elif change_90d < -0.05 %}text-red-400{% else %}text-gray-500{% endif %}">
                     {% if change_90d != 0 %}{{ "%+.2f"|format(change_90d) }}{% else %}&mdash;{% endif %}
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
-
-    <!-- Swap history chart -->
-    {% set lens = swap_history.values() | map('length') | list %}
-    {% set has_history = lens | max > 1 if lens else false %}
-    {% if has_history %}
-    <div class="mt-4 bg-gray-800/50 rounded-lg p-4">
-        <p class="text-xs text-gray-500 mb-2">Swap-renter siste 90 dager</p>
-        <canvas id="swap-history-chart"></canvas>
-    </div>
-    <script>
-    (function() {
-        Chart.defaults.color = '#9ca3af';
-        Chart.defaults.borderColor = '#374151';
-
-        const history = {{ swap_history | tojson }};
-        const styles = {
-            '3 Yr': { color: '#34d399', dash: [],      width: 2.5 },
-            '5 Yr': { color: '#60a5fa', dash: [6, 3],  width: 2.5 },
-            '10 Yr':{ color: '#a78bfa', dash: [2, 2],  width: 2.5 },
-        };
-
-        // Build shared date labels from the longest series
-        let allDates = [];
-        const dataByTenor = {};
-        for (const [tenor, points] of Object.entries(history)) {
-            if (points.length < 2) continue;
-            const mapped = points.map(p => {
-                const d = p.observed_at.split('T')[0];
-                // Format as "dd.mm"
-                const parts = d.split('-');
-                return { date: d, label: parts[2] + '.' + parts[1], rate: p.rate };
-            });
-            dataByTenor[tenor] = mapped;
-            if (mapped.length > allDates.length) {
-                allDates = mapped.map(m => m.label);
-            }
-        }
-
-        const datasets = [];
-        for (const [tenor, mapped] of Object.entries(dataByTenor)) {
-            const s = styles[tenor] || { color: '#9ca3af', dash: [], width: 2 };
-            datasets.push({
-                label: tenor,
-                data: mapped.map(m => m.rate),
-                borderColor: s.color,
-                backgroundColor: 'transparent',
-                borderWidth: s.width,
-                borderDash: s.dash,
-                pointRadius: 0,
-                pointHitRadius: 8,
-                tension: 0.3,
-            });
-        }
-
-        const ctx = document.getElementById('swap-history-chart');
-        if (ctx && datasets.length) {
-            if (ctx._chartInstance) ctx._chartInstance.destroy();
-            const chart = new Chart(ctx, {
-                type: 'line',
-                data: { labels: allDates, datasets },
-                options: {
-                    responsive: true,
-                    aspectRatio: 2.2,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: {
-                            labels: {
-                                usePointStyle: true,
-                                pointStyle: 'line',
-                                boxWidth: 20,
-                                font: { size: 11 },
-                            },
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(2) + '%',
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                maxTicksLimit: 10,
-                                font: { size: 10 },
-                                maxRotation: 45,
-                                minRotation: 0,
-                            },
-                        },
-                        y: {
-                            grid: { color: '#1f2937' },
-                            ticks: {
-                                callback: v => v.toFixed(2) + '%',
-                                font: { size: 10 },
-                            },
-                        },
-                    },
-                },
-            });
-            ctx._chartInstance = chart;
-        }
-    })();
-    </script>
-    {% endif %}
 
     {% else %}
     <p class="text-gray-500 text-sm">Kunne ikke hente swap-renter fra SEB</p>
