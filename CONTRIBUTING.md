@@ -2,6 +2,10 @@
 
 Takk for at du vurderer a bidra!
 
+## PR-policy
+
+Alle endringer til `main` ma ga via Pull Request. PRs krever **minst 1 godkjenning** fra maintainer for de kan merges. Direkte push til `main` er ikke tillatt.
+
 ## Kom i gang
 
 ```bash
@@ -10,6 +14,20 @@ cd studielan
 uv sync --dev
 uv run uvicorn app.main:app --reload --port 8000
 ```
+
+Apne [http://localhost:8000](http://localhost:8000) — dashboardet fungerer umiddelbart.
+
+### Backfill av databasen
+
+Swap-historikk lagres i `data/studielan.db` (SQLite, opprettes automatisk). Uten historikk mangler swap-graf og trendanalyse.
+
+For a fylle databasen med ~365 dager historikk:
+
+```bash
+curl -X POST http://localhost:8000/api/bootstrap
+```
+
+Eller klikk "Last ned historikk fra Cbonds"-knappen pa dashboardet.
 
 ## Kjor tester
 
@@ -34,7 +52,7 @@ Alle tester ma bestaes for en PR kan merges.
 4. Kjor testene (`uv run pytest tests/ -v`)
 5. Commit (`git commit -m "kort beskrivelse"`)
 6. Push (`git push origin min-feature`)
-7. Apne en Pull Request
+7. Apne en Pull Request — den vil bli reviewed og godkjent for merge
 
 ## Hva kan du bidra med?
 
