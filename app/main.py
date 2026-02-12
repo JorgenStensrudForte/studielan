@@ -34,22 +34,39 @@ app = FastAPI(title="Studielån Rentekalkulator", lifespan=lifespan)
 
 # --- Helpers ---
 
-def _compute_savings(lk: LanekassenRate, loan_amount: int) -> list[Savings]:
+def _compute_savings(
+    lk: LanekassenRate,
+    loan_amount: int,
+    estimates: list[EstimatedRate],
+) -> list[Savings]:
+    """Compare current LK fixed rate vs estimated next LK fixed rate.
+
+    Positive diff = next rate HIGHER → bind now saves money.
+    Negative diff = next rate LOWER → waiting saves money.
+    """
+    est_by_label = {e.tenor: e for e in estimates}
+    risk_map = {3: "lav", 5: "middels", 10: "høy"}
     results = []
     for attr, tenor_key in TENOR_ATTRS:
         fixed = getattr(lk, attr)
         if fixed is None:
             continue
+        label = TENOR_LABELS[tenor_key]
+        est = est_by_label.get(label)
+        if est is None:
+            continue
         years = TENOR_MAP[tenor_key]
-        annual_diff = (fixed - lk.floating) / 100 * loan_amount
+        annual_diff = (est.estimated_lk - fixed) / 100 * loan_amount
         results.append(Savings(
-            tenor=TENOR_LABELS[tenor_key],
+            tenor=label,
             fixed_rate=fixed,
-            floating_rate=lk.floating,
+            estimated_next_rate=est.estimated_lk,
             loan_amount=loan_amount,
             annual_diff=round(annual_diff),
             total_diff=round(annual_diff * years),
             years=years,
+            bind_now=annual_diff > 0,
+            risk=risk_map.get(years, "middels"),
         ))
     return results
 
@@ -290,7 +307,7 @@ async def _fetch_all_data(loan_amount: int) -> dict:
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_current)
 
     # Savings
-    savings = _compute_savings(lk_current, loan_amount) if lk_current else []
+    savings = _compute_savings(lk_current, loan_amount, estimates) if lk_current else []
 
     # Recommendation
     signal = _recommend(lk_current, swap_history, estimates)
@@ -361,7 +378,8 @@ async def api_dashboard(belop: int = Query(default=settings.default_loan_amount)
             for e in data["estimates"]
         ],
         "savings": [
-            {"tenor": s.tenor, "annual_diff": s.annual_diff, "total_diff": s.total_diff}
+            {"tenor": s.tenor, "fixed_rate": s.fixed_rate, "estimated_next_rate": s.estimated_next_rate,
+             "annual_diff": s.annual_diff, "total_diff": s.total_diff, "bind_now": s.bind_now, "risk": s.risk}
             for s in data["savings"]
         ],
         "signal": {
@@ -446,7 +464,13 @@ async def partial_besparelse(request: Request, belop: int = Query(default=settin
     except Exception:
         lk = None
 
-    savings = _compute_savings(lk, belop) if lk else []
+    try:
+        products_by_tenor = await finansportalen.fetch_products_by_tenor(top_n=5)
+    except Exception:
+        products_by_tenor = {}
+
+    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
+    savings = _compute_savings(lk, belop, estimates) if lk else []
     return templates.TemplateResponse("partials/besparelse.html", {
         "request": request,
         "savings": savings,

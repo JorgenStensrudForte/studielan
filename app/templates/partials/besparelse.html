@@ -1,23 +1,36 @@
 <div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
     <div class="flex items-center justify-between mb-1">
-        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Merkostnad ved binding</h2>
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Bind nå vs vent</h2>
         <span class="text-xs text-gray-500">ved {{ "{:,.0f}".format(loan_amount).replace(",", " ") }} kr</span>
     </div>
-    <p class="text-xs text-gray-600 mb-4">Forutsetter at flytende rente holder seg på dagens nivå hele perioden</p>
+    <p class="text-xs text-gray-600 mb-4">Basert på estimert neste Lånekassen-fastrente fra topp-5 banker</p>
     {% if savings %}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {% for s in savings %}
         <div class="bg-gray-800/50 rounded-lg p-3">
-            <p class="text-xs text-gray-500 mb-1">Fast {{ s.tenor }}</p>
+            <div class="flex items-center justify-between mb-1">
+                <p class="text-xs text-gray-500">Fast {{ s.tenor }}</p>
+                <span class="text-[10px] px-1.5 py-0.5 rounded-full
+                    {% if s.risk == 'lav' %}bg-emerald-900/40 text-emerald-400
+                    {% elif s.risk == 'middels' %}bg-yellow-900/40 text-yellow-400
+                    {% else %}bg-red-900/40 text-red-400{% endif %}">
+                    {{ s.risk }} risiko
+                </span>
+            </div>
             <p class="text-lg font-mono font-semibold
-                {% if s.annual_diff > 0 %}text-red-400{% elif s.annual_diff < 0 %}text-emerald-400{% else %}text-gray-300{% endif %}">
+                {% if s.bind_now %}text-emerald-400{% else %}text-red-400{% endif %}">
+                {% if s.bind_now %}Bind nå{% else %}Vent{% endif %}
+            </p>
+            <p class="text-xs mt-1
+                {% if s.bind_now %}text-emerald-400/80{% else %}text-red-400/80{% endif %}">
                 {{ "{:+,.0f}".format(s.annual_diff).replace(",", " ") }} kr/år
             </p>
-            <p class="text-xs text-gray-500 mt-1">
-                {{ "{:+,.0f}".format(s.total_diff).replace(",", " ") }} kr over {{ s.years }} år
+            <p class="text-xs mt-0.5 font-medium
+                {% if s.bind_now %}text-emerald-300{% else %}text-red-300{% endif %}">
+                {{ "{:+,.0f}".format(s.total_diff).replace(",", " ") }} kr totalt over {{ s.years }} år
             </p>
             <p class="text-xs text-gray-600 mt-1">
-                {{ "%.3f"|format(s.fixed_rate) }}% fast vs {{ "%.3f"|format(s.floating_rate) }}% flyt.
+                {{ "%.3f"|format(s.fixed_rate) }}% nå vs est. {{ "%.3f"|format(s.estimated_next_rate) }}% neste
             </p>
         </div>
         {% endfor %}

@@ -8,7 +8,7 @@ Ingen Supabase, ingen auth, ingen frontend build step.
 - `uv sync` - installer avhengigheter
 - `uv run uvicorn app.main:app --reload --port 8000` - kjør lokalt
 - `uv run pytest tests/ -v` - kjør tester
-- `docker compose -f docker-compose.prod.yml up --build` - Docker
+- `docker compose up --build` - Docker
 
 ## Kodestil
 - FastAPI async, Pydantic, tynne ruter → services

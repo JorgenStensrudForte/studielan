@@ -44,12 +44,14 @@ class EstimatedRate:
 @dataclass
 class Savings:
     tenor: str
-    fixed_rate: float
-    floating_rate: float
+    fixed_rate: float  # nåværende LK-fastrente
+    estimated_next_rate: float  # estimert neste LK-fastrente
     loan_amount: float
-    annual_diff: float  # positiv = fastrente dyrere
-    total_diff: float
+    annual_diff: float  # positiv = neste rate høyere → bind nå sparer
+    total_diff: float  # annual_diff * years
     years: int
+    bind_now: bool  # True = binding nå er billigere
+    risk: str  # "lav", "middels", "høy"
 
 
 @dataclass
