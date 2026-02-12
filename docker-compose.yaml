@@ -4,6 +4,8 @@ services:
     restart: unless-stopped
     expose:
       - "80"
+    environment:
+      - SERVICE_FQDN_CADDY=${SERVICE_FQDN_CADDY}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
