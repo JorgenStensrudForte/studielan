@@ -29,7 +29,7 @@
     {% if not has_swap_history %}
     <p class="mt-3 text-xs text-amber-400/70">
         Merk: Ingen swap-historikk tilgjengelig. Trend-analyse er begrenset.
-        Bruk «Bootstrap Cbonds» eller vent til nok daglige SEB-datapunkter er samlet.
+        Bruk &laquo;Bootstrap Cbonds&raquo; eller vent til nok daglige SEB-datapunkter er samlet.
     </p>
     {% endif %}
 </div>
@@ -43,42 +43,50 @@
         <div class="rounded-lg p-3 border
             {% if ts.color == 'green' %}bg-emerald-900/20 border-emerald-800/50
             {% elif ts.color == 'yellow' %}bg-yellow-900/20 border-yellow-800/50
-            {% else %}bg-gray-800/50 border-gray-700/50{% endif %}">
+            {% else %}bg-red-900/20 border-red-800/50{% endif %}">
             <div class="flex items-center justify-between mb-2">
                 <span class="text-sm font-medium text-white">{{ ts.tenor }}</span>
                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full
                     {% if ts.color == 'green' %}bg-emerald-800/50 text-emerald-300
                     {% elif ts.color == 'yellow' %}bg-yellow-800/50 text-yellow-300
-                    {% else %}bg-gray-700/50 text-gray-400{% endif %}">
+                    {% else %}bg-red-800/50 text-red-300{% endif %}">
                     {{ ts.recommendation }}
                 </span>
             </div>
 
             <div class="space-y-1 text-xs">
-                {% if ts.spread is not none %}
-                <div class="flex justify-between">
-                    <span class="text-gray-500">Spread:</span>
-                    <span class="font-mono
-                        {% if ts.spread < 0 %}text-emerald-400{% elif ts.spread > 0.20 %}text-red-400{% else %}text-gray-300{% endif %}">
-                        {{ "%+.3f"|format(ts.spread) }}pp
+                {% if ts.current_rate is not none and ts.estimated_next is not none %}
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-500">Rente nå:</span>
+                    <span class="font-mono text-gray-300">{{ "%.3f"|format(ts.current_rate) }}%</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-500">Est. neste:</span>
+                    <span class="font-mono text-gray-300">{{ "%.3f"|format(ts.estimated_next) }}%</span>
+                </div>
+                {% if ts.est_diff is not none %}
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-500">Endring:</span>
+                    <span class="font-mono font-medium
+                        {% if ts.est_diff > 0.05 %}text-emerald-400{% elif ts.est_diff < -0.05 %}text-red-400{% else %}text-gray-400{% endif %}">
+                        {{ "%+.3f"|format(ts.est_diff) }}pp
                     </span>
+                </div>
+                {% endif %}
+                {% elif ts.current_rate is not none %}
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-500">Rente nå:</span>
+                    <span class="font-mono text-gray-300">{{ "%.3f"|format(ts.current_rate) }}%</span>
                 </div>
                 {% endif %}
 
                 {% if ts.swap_trend is not none %}
-                <div class="flex justify-between">
+                <div class="flex justify-between items-center mt-1 pt-1 border-t border-gray-700/30">
                     <span class="text-gray-500">Swap-trend ({{ ts.swap_trend_days }}d):</span>
                     <span class="font-mono
-                        {% if ts.swap_trend < -0.10 %}text-emerald-400{% elif ts.swap_trend > 0.10 %}text-red-400{% else %}text-gray-300{% endif %}">
+                        {% if ts.swap_trend > 0.10 %}text-emerald-400{% elif ts.swap_trend < -0.10 %}text-red-400{% else %}text-gray-400{% endif %}">
                         {{ "%+.2f"|format(ts.swap_trend) }}pp
                     </span>
-                </div>
-                {% endif %}
-
-                {% if ts.estimated_next is not none %}
-                <div class="flex justify-between">
-                    <span class="text-gray-500">Est. neste LK:</span>
-                    <span class="font-mono text-gray-300">{{ "%.3f"|format(ts.estimated_next) }}%</span>
                 </div>
                 {% endif %}
             </div>

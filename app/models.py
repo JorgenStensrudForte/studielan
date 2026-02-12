@@ -59,12 +59,13 @@ class Savings:
 class TenorSignal:
     """Anbefaling per bindingsperiode."""
     tenor: str
-    recommendation: str  # "BIND", "VENT", "HOLD FLYTENDE", "USIKKER"
+    recommendation: str  # "BIND", "VENT", "USIKKER"
     color: str
-    spread: float | None  # fast - flytende
+    current_rate: float | None  # nåværende LK-fastrente
+    estimated_next: float | None  # estimert neste LK-fastrente
+    est_diff: float | None  # estimated_next - current_rate (positiv = neste dyrere → bind nå)
     swap_trend: float | None  # endring siste 90d
     swap_trend_days: int  # faktisk antall dager med data
-    estimated_next: float | None  # estimert neste LK-rente
     reasons: list[str] = field(default_factory=list)
 
 

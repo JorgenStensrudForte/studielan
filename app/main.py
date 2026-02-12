@@ -98,33 +98,34 @@ def _tenor_signal(
 ) -> TenorSignal:
     """Analyze a single tenor and produce a signal.
 
-    Key insight: When you bind in a søknadsvindu, you get the ALREADY SET
-    fastrente for the current period. The question is whether that fixed rate
-    will be better than staying on floating for the binding period.
+    Primary signal: est_diff = estimated next LK fastrente - current LK fastrente.
+      Positive → next period more expensive → bind now to lock in cheaper rate.
+      Negative → next period cheaper → wait for next window.
 
-    - Spread (fast - flytende) is what you pay TODAY for certainty.
-    - Estimated next LK rate tells you if the NEXT period's fastrente will be
-      higher or lower (useful for deciding: bind now or wait for next window).
-    - Swap trend tells you where the market expects rates to go.
+    Confirmation: swap trend shows market rate direction over last ~90 days.
+      Rising swap → market expects higher rates → confirms bind.
+      Falling swap → market expects lower rates → confirms wait.
     """
     label = TENOR_LABELS[tenor_key]
     reasons = []
 
-    # Spread: current fixed rate vs current floating rate
-    spread = None
+    # Current fixed rate
+    current_rate = None
     if lk:
-        fixed = getattr(lk, lk_attr)
-        if fixed is not None:
-            spread = round(fixed - lk.floating, 3)
+        current_rate = getattr(lk, lk_attr)
+
+    # Estimated next LK fastrente
+    est_next = estimated.estimated_lk if estimated else None
+    est_diff = estimated.diff if estimated else None
 
     # Swap trend from historical data
     swap_trend = None
     swap_days = 0
     has_trend = False
     if len(swap_history) >= 2:
-        current_rate = swap_history[-1]["rate"]
+        newest_rate = swap_history[-1]["rate"]
         oldest_rate = swap_history[0]["rate"]
-        swap_trend = round(current_rate - oldest_rate, 3)
+        swap_trend = round(newest_rate - oldest_rate, 3)
         try:
             newest_dt = datetime.fromisoformat(swap_history[-1]["observed_at"])
             oldest_dt = datetime.fromisoformat(swap_history[0]["observed_at"])
@@ -133,84 +134,93 @@ def _tenor_signal(
             swap_days = len(swap_history)
         has_trend = swap_days >= 14
 
-    # Estimated next LK fastrente (affects NEXT window, not this one)
-    est_next = estimated.estimated_lk if estimated else None
-    est_diff = estimated.diff if estimated else None
-
     # --- Build reasons (observations) ---
 
-    # Spread observation
-    if spread is not None:
-        if spread < 0:
-            reasons.append(f"Fast {label} er {abs(spread):.3f}pp BILLIGERE enn flytende - uvanlig gunstig")
-        elif spread < 0.15:
-            reasons.append(f"Lav spread ({spread:.3f}pp) - liten merkostnad for forutsigbarhet")
+    # Rate comparison: current vs estimated next
+    if current_rate is not None and est_next is not None and est_diff is not None:
+        if est_diff > 0.05:
+            reasons.append(
+                f"Nå: {current_rate:.3f}% → Est. neste: {est_next:.3f}% "
+                f"(+{est_diff:.3f}pp) — bind nå er billigere enn å vente"
+            )
+        elif est_diff < -0.05:
+            reasons.append(
+                f"Nå: {current_rate:.3f}% → Est. neste: {est_next:.3f}% "
+                f"({est_diff:.3f}pp) — neste periode forventes billigere"
+            )
         else:
-            reasons.append(f"Fast {label} er {spread:.3f}pp dyrere enn flytende")
+            reasons.append(
+                f"Nå: {current_rate:.3f}% → Est. neste: {est_next:.3f}% "
+                f"({est_diff:+.3f}pp) — omtrent uendret"
+            )
+    elif current_rate is not None:
+        reasons.append(f"Nåværende fastrente: {current_rate:.3f}% (mangler estimat for neste)")
 
     # Swap trend observation
     if has_trend:
         period_label = f"siste {swap_days}d" if swap_days < 80 else "siste 90d"
-        if swap_trend < -0.20:
-            reasons.append(f"Swap {label} falt {abs(swap_trend):.2f}pp {period_label} - markedet forventer lavere renter")
-        elif swap_trend > 0.20:
-            reasons.append(f"Swap {label} steg {swap_trend:.2f}pp {period_label} - markedet forventer høyere renter")
+        if swap_trend > 0.10:
+            reasons.append(f"Swap {label} steg {swap_trend:+.2f}pp {period_label} — markedet forventer høyere renter")
+        elif swap_trend < -0.10:
+            reasons.append(f"Swap {label} falt {swap_trend:+.2f}pp {period_label} — markedet forventer lavere renter")
         else:
             reasons.append(f"Swap {label} stabil ({swap_trend:+.2f}pp {period_label})")
     elif len(swap_history) < 2:
-        reasons.append(f"Mangler swap-historikk for {label} - kan ikke vurdere trend")
-
-    # Estimated next LK rate (informational: affects next window)
-    if est_diff is not None:
-        if est_diff > 0.05:
-            reasons.append(f"Neste periodes fastrente anslått til {est_next:.3f}% (opp {est_diff:.3f}pp) - denne renta er trolig billigere enn neste")
-        elif est_diff < -0.05:
-            reasons.append(f"Neste periodes fastrente anslått til {est_next:.3f}% (ned {abs(est_diff):.3f}pp) - kan lønne seg å vente til neste vindu")
+        reasons.append(f"Mangler swap-historikk for {label} — kan ikke vurdere trend")
 
     # --- Decision logic ---
-    falling_swap = has_trend and swap_trend < -0.20
-    rising_swap = has_trend and swap_trend > 0.20
-    est_next_cheaper = est_diff is not None and est_diff < -0.10
-    est_next_dearer = est_diff is not None and est_diff > 0.05
+    # Primary: estimated rate diff
+    est_bind = est_diff is not None and est_diff > 0.05  # next period dearer
+    est_wait = est_diff is not None and est_diff < -0.05  # next period cheaper
+    est_neutral = est_diff is not None and not est_bind and not est_wait
 
-    # 1. Negative spread: free lunch
-    if spread is not None and spread < 0:
-        return TenorSignal(tenor=label, recommendation="BIND", color="green",
-                           spread=spread, swap_trend=swap_trend, swap_trend_days=swap_days,
-                           estimated_next=est_next, reasons=reasons)
+    # Confirmation: swap trend
+    swap_rising = has_trend and swap_trend > 0.10
+    swap_falling = has_trend and swap_trend < -0.10
 
-    # 2. Clear "wait" signals: swap falling OR next period significantly cheaper
-    if falling_swap and not rising_swap:
-        return TenorSignal(tenor=label, recommendation="VENT", color="yellow",
-                           spread=spread, swap_trend=swap_trend, swap_trend_days=swap_days,
-                           estimated_next=est_next, reasons=reasons)
+    def _make(rec, color):
+        return TenorSignal(
+            tenor=label, recommendation=rec, color=color,
+            current_rate=current_rate, estimated_next=est_next,
+            est_diff=est_diff, swap_trend=swap_trend,
+            swap_trend_days=swap_days, reasons=reasons,
+        )
 
-    if est_next_cheaper and not rising_swap:
-        return TenorSignal(tenor=label, recommendation="VENT", color="yellow",
-                           spread=spread, swap_trend=swap_trend, swap_trend_days=swap_days,
-                           estimated_next=est_next, reasons=reasons)
+    # No estimate data at all → can't recommend
+    if est_diff is None:
+        if has_trend and swap_rising:
+            reasons.append("Swap stiger, men mangler rateestimat — vurder å binde")
+            return _make("USIKKER", "yellow")
+        reasons.append("Utilstrekkelig data for anbefaling")
+        return _make("USIKKER", "yellow")
 
-    # 3. "Bind" signals: need BOTH a directional signal AND low spread
-    #    We require at least one confirmed trend signal to say BIND
-    small_spread = spread is not None and spread < 0.25
-    has_bind_signal = rising_swap or (est_next_dearer and has_trend)
+    # 1. Est diff says BIND + swap confirms or is neutral → BIND
+    if est_bind and (swap_rising or not swap_falling):
+        return _make("BIND", "green")
 
-    if has_bind_signal and small_spread:
-        return TenorSignal(tenor=label, recommendation="BIND", color="green",
-                           spread=spread, swap_trend=swap_trend, swap_trend_days=swap_days,
-                           estimated_next=est_next, reasons=reasons)
+    # 2. Est diff says BIND but swap contradicts → USIKKER
+    if est_bind and swap_falling:
+        reasons.append("Estimat peker opp, men swap-trend peker ned — motstridende signaler")
+        return _make("USIKKER", "yellow")
 
-    # 4. Not enough data to make a strong call
-    if not has_trend and spread is not None and spread > 0:
-        reasons.append("Utilstrekkelig historikk for sikker anbefaling")
-        return TenorSignal(tenor=label, recommendation="USIKKER", color="yellow",
-                           spread=spread, swap_trend=swap_trend, swap_trend_days=swap_days,
-                           estimated_next=est_next, reasons=reasons)
+    # 3. Est diff says WAIT + swap confirms or is neutral → VENT
+    if est_wait and (swap_falling or not swap_rising):
+        return _make("VENT", "red")
 
-    # 5. Default: hold floating
-    return TenorSignal(tenor=label, recommendation="HOLD FLYTENDE", color="red",
-                       spread=spread, swap_trend=swap_trend, swap_trend_days=swap_days,
-                       estimated_next=est_next, reasons=reasons)
+    # 4. Est diff says WAIT but swap contradicts → USIKKER
+    if est_wait and swap_rising:
+        reasons.append("Estimat peker ned, men swap-trend peker opp — motstridende signaler")
+        return _make("USIKKER", "yellow")
+
+    # 5. Neutral est diff — use swap as tiebreaker
+    if est_neutral:
+        if swap_rising:
+            reasons.append("Rateestimat omtrent uendret, men swap stiger — kan lønne seg å binde")
+            return _make("BIND", "green")
+        if swap_falling:
+            reasons.append("Rateestimat omtrent uendret, men swap faller — kan lønne seg å vente")
+            return _make("VENT", "red")
+        return _make("USIKKER", "yellow")
 
 
 def _recommend(
@@ -218,7 +228,10 @@ def _recommend(
     swap_history: dict[str, list[dict]],
     estimates: list[EstimatedRate],
 ) -> Signal:
-    """Produce per-tenor signals and an overall recommendation."""
+    """Produce per-tenor signals and an overall recommendation.
+
+    Picks best tenor by highest est_diff (= most savings from binding now).
+    """
     est_by_label = {e.tenor: e for e in estimates}
     per_tenor = []
 
@@ -229,7 +242,6 @@ def _recommend(
         ts = _tenor_signal(tenor_key, lk, attr, history, estimated)
         per_tenor.append(ts)
 
-    # Overall: pick the best tenor to bind (if any)
     bind_tenors = [t for t in per_tenor if t.recommendation == "BIND"]
     wait_tenors = [t for t in per_tenor if t.recommendation == "VENT"]
     unsure_tenors = [t for t in per_tenor if t.recommendation == "USIKKER"]
@@ -237,11 +249,14 @@ def _recommend(
     reasons = []
 
     if bind_tenors:
-        # Prefer the tenor with the lowest (most negative) spread
-        best = min(bind_tenors, key=lambda t: t.spread if t.spread is not None else 999)
-        reasons.append(f"Beste binding: {best.tenor} (spread {best.spread:+.3f}pp)" if best.spread is not None else f"Beste binding: {best.tenor}")
+        # Prefer tenor with highest est_diff (biggest savings from binding now)
+        best = max(bind_tenors, key=lambda t: t.est_diff if t.est_diff is not None else -999)
+        if best.est_diff is not None:
+            reasons.append(f"Beste binding: {best.tenor} (neste rente est. {best.est_diff:+.3f}pp høyere)")
+        else:
+            reasons.append(f"Beste binding: {best.tenor}")
         for t in bind_tenors:
-            reasons.extend(t.reasons[:1])  # top reason per tenor
+            reasons.extend(t.reasons[:1])
         return Signal(
             recommendation=f"BIND {best.tenor.upper()}",
             color="green",
@@ -251,21 +266,21 @@ def _recommend(
         )
 
     if wait_tenors:
-        reasons.append("Rentene peker nedover - vent til neste vindu")
+        reasons.append("Estimert neste fastrente er lavere — vent til neste vindu")
         for t in wait_tenors:
             reasons.extend(t.reasons[:1])
         return Signal(
             recommendation="VENT",
-            color="yellow",
+            color="red",
             best_tenor=None,
             reasons=reasons,
             per_tenor=per_tenor,
         )
 
-    if unsure_tenors and not any(t.recommendation == "HOLD FLYTENDE" for t in per_tenor):
-        # All tenors are USIKKER (no swap history) — be honest about it
-        reasons.append("Mangler swap-historikk for trendanalyse")
-        reasons.append("Kjør bootstrap (Cbonds) eller vent til nok daglige SEB-datapunkter samles")
+    if unsure_tenors:
+        reasons.append("Motstridende signaler eller utilstrekkelig data")
+        for t in unsure_tenors:
+            reasons.extend(t.reasons[:1])
         return Signal(
             recommendation="USIKKER",
             color="yellow",
@@ -274,16 +289,11 @@ def _recommend(
             per_tenor=per_tenor,
         )
 
-    # Default: hold flytende
-    for t in per_tenor:
-        if t.spread is not None and t.spread > 0:
-            reasons.append(f"Fast {t.tenor}: +{t.spread:.3f}pp dyrere")
-    if not reasons:
-        reasons.append("Ingen sterke signaler i noen retning")
-
+    # Fallback (shouldn't normally happen)
+    reasons.append("Ingen sterke signaler i noen retning")
     return Signal(
-        recommendation="HOLD FLYTENDE",
-        color="red",
+        recommendation="USIKKER",
+        color="yellow",
         best_tenor=None,
         reasons=reasons,
         per_tenor=per_tenor,
@@ -407,7 +417,8 @@ async def api_dashboard(belop: int = Query(default=settings.default_loan_amount)
             "reasons": data["signal"].reasons,
             "per_tenor": [
                 {"tenor": t.tenor, "recommendation": t.recommendation, "color": t.color,
-                 "spread": t.spread, "swap_trend": t.swap_trend}
+                 "current_rate": t.current_rate, "estimated_next": t.estimated_next,
+                 "est_diff": t.est_diff, "swap_trend": t.swap_trend}
                 for t in data["signal"].per_tenor
             ],
         },
