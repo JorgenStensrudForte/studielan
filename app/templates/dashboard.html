@@ -14,11 +14,12 @@
     </summary>
     <div class="px-5 pb-5 space-y-4 text-sm text-gray-400 leading-relaxed border-t border-gray-800 pt-4">
         <div>
-            <h3 class="text-white font-semibold mb-1">Slik settes renta på studielånet</h3>
-            <p>Lånekassen beregner renta ut fra <strong class="text-gray-200">gjennomsnittet av de fem beste boliglånsrentene</strong> i markedet (fra Finansportalen), minus 0,15 prosentpoeng. Dette gjelder både flytende og fast rente.</p>
+            <h3 class="text-white font-semibold mb-1">Slik fungerer oppsigelse av fastrente</h3>
+            <p>Ved oppsigelse av fastrente beregner Lånekassen rentetap/rentegevinst etter regelverket slik at bruddet i prinsippet blir økonomisk nøytralt. Hoveddriveren er <strong class="text-gray-200">forholdet mellom din bundne rente og ny markedsrente for gjenværende bindingstid</strong>, ikke flytende rente alene.</p>
             <ul class="mt-2 space-y-1 ml-4 list-disc text-gray-500">
-                <li><strong class="text-gray-300">Flytende rente:</strong> Observasjonsperiode 2 mnd + 2 mnd opphold. Renta fra januar er basert på september&ndash;oktober.</li>
-                <li><strong class="text-gray-300">Fast rente:</strong> Observasjonsperiode 1 mnd + 1 mnd opphold. Kortere forsinkelse enn flytende.</li>
+                <li><strong class="text-gray-300">Ny markedsrente:</strong> Interpoleres lineært mellom de to nærmeste standardpunktene (flytende/3 år, 3/5 år eller 5/10 år).</li>
+                <li><strong class="text-gray-300">Kontantstrøm:</strong> Beregnes med månedlige terminer over faktisk gjenstående nedbetalingstid, og diskonteres månedlig (finansavtaleforskriften § 2-1).</li>
+                <li><strong class="text-gray-300">Etter oppsigelse:</strong> Du må ha flytende rente i minst 2 måneder før ny binding.</li>
             </ul>
         </div>
 
@@ -28,46 +29,93 @@
         </div>
 
         <div>
-            <h3 class="text-white font-semibold mb-1">Strategien: Hvorfor binde når fastrenta er dyrere?</h3>
-            <p>Normalt er fastrenta <em>litt høyere</em> enn flytende (spreaden er typisk 0,05&ndash;0,15 prosentpoeng). Det er prisen for forutsigbarhet. Men her er logikken bak &laquo;gamblingen&raquo;:</p>
-            <ol class="mt-2 space-y-2 ml-4 list-decimal">
-                <li>
-                    <strong class="text-gray-200">Du tror flytende rente vil stige</strong> &mdash; Norges Bank kan heve styringsrenta, eller bankene øker marginene. Da vil Lånekassens flytende rente følge etter (med 4 mnd forsinkelse).
-                </li>
-                <li>
-                    <strong class="text-gray-200">Swap-renter viser markedets forventning</strong> &mdash; Swap-renter (f.eks. 3-års NOK swap) reflekterer hva markedet tror om fremtidige korte renter. Hvis swap-renta faller, forventer markedet rentenedgang. Hvis den stiger, forventes oppgang.
-                </li>
-                <li>
-                    <strong class="text-gray-200">Spreaden kan bli negativ</strong> &mdash; I sjeldne tilfeller kan fastrenta faktisk bli <em>lavere</em> enn flytende. Dette skjer fordi fast og flytende rente har ulike observasjonsperioder og reagerer på ulike deler av rentekurven. Da er det en &laquo;gratis lunsj&raquo;.
-                </li>
-                <li>
-                    <strong class="text-gray-200">Du kan bryte avtalen</strong> &mdash; Du kan si opp fastrenteavtalen i neste søknadsvindu. Kostnad: rentetap/rentegevinst beregnes slik at hverken du eller Lånekassen tjener på bruddet. Etter oppsigelse må du ha flytende i minst 2 måneder.
-                </li>
-            </ol>
+            <h3 class="text-white font-semibold mb-2">To likeverdige valg: hva prøver du å optimalisere?</h3>
+            <p class="mb-3">Denne appen vurderer to actions som er likeverdige beslutninger: <strong class="text-gray-200">binde fastrente</strong> eller <strong class="text-gray-200">si opp fastrente</strong>. De har ulik logikk, ulik risiko og ulik timing.</p>
+
+            <div data-action-tab-group>
+                <div class="inline-flex rounded-lg border border-gray-700 overflow-hidden mb-3">
+                    <button type="button" data-action-tab="bind" aria-selected="true" class="px-3 py-1.5 text-xs font-semibold bg-gray-700 text-white">Binde fastrente</button>
+                    <button type="button" data-action-tab="terminate" aria-selected="false" class="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-gray-400">Si opp fastrente</button>
+                </div>
+
+                <div data-action-panel="bind" class="rounded-lg border border-gray-800 bg-gray-950/30 p-3">
+                    <p class="text-gray-300"><strong class="text-gray-200">Når denne actionen er best:</strong> Når du vil låse dagens nivå fordi du tror neste fastrente blir høyere, eller du vil ha forutsigbarhet nå.</p>
+                    <ul class="mt-2 space-y-1 ml-4 list-disc text-gray-500">
+                        <li>Primærsignal: Estimert neste fastrente minus dagens fastrente.</li>
+                        <li>Sekundærsignal: Swap-trend som støtte for retning.</li>
+                        <li>Kostnad/gevinst oppstår først hvis du senere velger å si opp.</li>
+                    </ul>
+                </div>
+
+                <div data-action-panel="terminate" class="rounded-lg border border-gray-800 bg-gray-950/30 p-3 hidden">
+                    <p class="text-gray-300"><strong class="text-gray-200">Når denne actionen er best:</strong> Når ny markedsrente for gjenværende bindingstid er lavere enn det du har låst inn, og regelstyrt nåverdi peker i din favør.</p>
+                    <ul class="mt-2 space-y-1 ml-4 list-disc text-gray-500">
+                        <li>Primærsignal: Forskjell mellom bundet rente og ny interpolert markedsrente.</li>
+                        <li>Kalkyle: Månedlige terminer over faktisk gjenstående løpetid, diskontert månedlig.</li>
+                        <li>Friksjon: Oppsigelse kun i vindu + minst 2 måneder flytende etterpå.</li>
+                    </ul>
+                </div>
+            </div>
         </div>
 
         <div>
             <h3 class="text-white font-semibold mb-1">Hva dashboardet hjelper deg med</h3>
             <ul class="space-y-1 ml-4 list-disc text-gray-500">
-                <li><strong class="text-gray-300">Lånekassen-panelet:</strong> Viser gjeldende renter og spreaden mellom fast og flytende.</li>
-                <li><strong class="text-gray-300">Swap-renter (SEB):</strong> Live markedsrenter som indikerer forventet renteutvikling. Faller de? Da kan det lønne seg å vente.</li>
+                <li><strong class="text-gray-300">Lånekassen-panelet:</strong> Viser gjeldende flytende- og fastrenter.</li>
+                <li><strong class="text-gray-300">Swap-renter (SEB):</strong> Markedsindikator for retning/tempo i renteforventninger.</li>
                 <li><strong class="text-gray-300">Banker (Finansportalen):</strong> Topp 5 fastrente-tilbud per bindingsperiode &mdash; disse driver Lånekassens neste rentefastsettelse.</li>
-                <li><strong class="text-gray-300">Estimert neste LK-rente:</strong> Beregnet fra bankrentene (snitt topp 5 &minus; 0,15pp).</li>
-                <li><strong class="text-gray-300">Besparelse:</strong> Merkostnad ved å binde vs. flytende ved dagens renter.</li>
-                <li><strong class="text-gray-300">Vurdering per tenor:</strong> Sammenligning av 3, 5 og 10 år med anbefaling for hver.</li>
+                <li><strong class="text-gray-300">Detaljert popup:</strong> Viser regelstyrt beregning med interpolert markedsrente, ikke-diskontert total og diskontert nåverdi.</li>
+                <li><strong class="text-gray-300">Vurdering per tenor:</strong> Score-basert sammenligning av 3, 5 og 10 år (signal, datakvalitet og usikkerhet).</li>
             </ul>
         </div>
 
         <div class="text-xs text-gray-600 pt-2 border-t border-gray-800/50">
             Kilde: <a href="https://lanekassen.no/nb-NO/gjeld-og-betaling/renter-og-gebyrer/" class="underline hover:text-gray-400">Lånekassen &mdash; Renter og gebyrer</a> |
             <a href="https://lanekassen.no/nb-NO/gjeld-og-betaling/renter-og-gebyrer/avbryte-fastrenteavtale/" class="underline hover:text-gray-400">Avbryte fastrenteavtale</a> |
+            <a href="https://lanekassen.no/nb-NO/regelverk/tilbakebetaling/tb-forstedelen-kapittel2#12" class="underline hover:text-gray-400">Regelverk kapittel 2 (§ 10&ndash;12)</a> |
             <a href="https://www.smartepenger.no/lan/314-renter-og-tilbakebetaling-i-lanekassen" class="underline hover:text-gray-400">Smartepenger</a>
         </div>
     </div>
 </details>
 
+<script>
+(function() {
+    const groups = document.querySelectorAll('[data-action-tab-group]');
+    if (!groups.length) return;
+
+    groups.forEach(group => {
+        const tabs = group.querySelectorAll('[data-action-tab]');
+        const panels = group.querySelectorAll('[data-action-panel]');
+
+        function setActive(key) {
+            tabs.forEach(tab => {
+                const active = tab.dataset.actionTab === key;
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                tab.classList.toggle('bg-gray-700', active);
+                tab.classList.toggle('text-white', active);
+                tab.classList.toggle('bg-gray-900', !active);
+                tab.classList.toggle('text-gray-400', !active);
+            });
+
+            panels.forEach(panel => {
+                panel.classList.toggle('hidden', panel.dataset.actionPanel !== key);
+            });
+        }
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                setActive(tab.dataset.actionTab);
+            });
+        });
+
+        const initial = Array.from(tabs).find(tab => tab.getAttribute('aria-selected') === 'true');
+        setActive(initial ? initial.dataset.actionTab : tabs[0].dataset.actionTab);
+    });
+})();
+</script>
+
 <!-- Loan amount input -->
-<div class="mb-6 flex items-center gap-4 bg-gray-900 rounded-xl p-4 border border-gray-800">
+<div class="mb-6 flex flex-wrap items-center gap-4 bg-gray-900 rounded-xl p-4 border border-gray-800">
     <label for="belop" class="text-sm font-medium text-gray-300 whitespace-nowrap">Lånebeløp:</label>
     <input
         type="number"
@@ -81,9 +129,25 @@
         hx-get="/partials/besparelse"
         hx-trigger="change, keyup changed delay:500ms"
         hx-target="#besparelse-panel"
-        hx-include="this"
+        hx-include="#belop,#remaining_years"
     >
     <span class="text-gray-400 text-sm">kr</span>
+    <label for="remaining_years" class="text-sm font-medium text-gray-300 whitespace-nowrap">Gjenstående nedbetalingstid:</label>
+    <input
+        type="number"
+        id="remaining_years"
+        name="remaining_years"
+        value="{{ remaining_years }}"
+        step="1"
+        min="1"
+        max="40"
+        class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white w-24 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+        hx-get="/partials/besparelse"
+        hx-trigger="change, keyup changed delay:500ms"
+        hx-target="#besparelse-panel"
+        hx-include="#belop,#remaining_years"
+    >
+    <span class="text-gray-400 text-sm">år</span>
     <span class="text-gray-500 text-sm ml-auto">{{ today.strftime('%d. %b %Y') }}</span>
 </div>
 
@@ -94,8 +158,43 @@
     <div>
         <p class="font-semibold text-emerald-300">Søknadsvindu er ÅPENT!</p>
         <p class="text-emerald-400/80 text-sm">{{ current_window[0].strftime('%d.') }}&ndash;{{ current_window[1].strftime('%d. %B %Y') }} &mdash; Du kan søke om fast rente nå</p>
+        {% if window_countdown_seconds is not none %}
+        <p class="text-emerald-300 text-sm mt-1">
+            Nedtelling til dagen før fristen ({{ window_countdown_label }}):
+            <span id="window-countdown" data-seconds="{{ window_countdown_seconds }}" class="font-mono font-semibold"></span>
+        </p>
+        {% endif %}
     </div>
 </div>
+{% if window_countdown_seconds is not none %}
+<script>
+(function() {
+    const el = document.getElementById('window-countdown');
+    if (!el) return;
+    let left = parseInt(el.dataset.seconds || '0', 10);
+    if (Number.isNaN(left)) left = 0;
+
+    function render() {
+        if (left <= 0) {
+            el.textContent = '00d 00t 00m';
+            return;
+        }
+        const days = Math.floor(left / 86400);
+        const hours = Math.floor((left % 86400) / 3600);
+        const minutes = Math.floor((left % 3600) / 60);
+        el.textContent = String(days).padStart(2, '0') + 'd '
+            + String(hours).padStart(2, '0') + 't '
+            + String(minutes).padStart(2, '0') + 'm';
+    }
+
+    render();
+    setInterval(function() {
+        left = Math.max(0, left - 1);
+        render();
+    }, 1000);
+})();
+</script>
+{% endif %}
 {% else %}
 <div class="mb-6 bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-3">
     <span class="text-xl text-gray-500">&#x1f551;</span>

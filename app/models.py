@@ -66,6 +66,9 @@ class TenorSignal:
     est_diff: float | None  # estimated_next - current_rate (positiv = neste dyrere → bind nå)
     swap_trend: float | None  # endring siste 90d
     swap_trend_days: int  # faktisk antall dager med data
+    score: float = 0.0  # samlescore (høyere = sterkere case for binding)
+    confidence: float = 0.0  # 0..1 hvor robust signalet er
+    data_quality: str = "ukjent"  # "høy", "middels", "lav", "ukjent"
     reasons: list[str] = field(default_factory=list)
 
 

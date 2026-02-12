@@ -187,28 +187,26 @@
             {% endfor %}
         };
 
-        /* Vekting per tenor: hvordan gjenstående bindingsperiode
-           fordeles på rentekurvens punkter (sum = 100 %).
-           Kortere binding → mer vekt på kort rente.
-           Lengre binding → mer vekt på lang rente. */
-        const WEIGHTS = {
+        const remainingLoanYears = {{ remaining_years | default(20) }};
+
+        const LEGACY_WEIGHTS = {
             '3 år': [
-                { label: 'Flytende',  pct: 0.10 },
-                { label: '3 år',      pct: 0.70 },
-                { label: '5 år',      pct: 0.15 },
-                { label: '10 år',     pct: 0.05 },
+                { label: 'Flytende', pct: 0.10 },
+                { label: '3 år', pct: 0.70 },
+                { label: '5 år', pct: 0.15 },
+                { label: '10 år', pct: 0.05 },
             ],
             '5 år': [
-                { label: 'Flytende',  pct: 0.05 },
-                { label: '3 år',      pct: 0.15 },
-                { label: '5 år',      pct: 0.65 },
-                { label: '10 år',     pct: 0.15 },
+                { label: 'Flytende', pct: 0.05 },
+                { label: '3 år', pct: 0.15 },
+                { label: '5 år', pct: 0.65 },
+                { label: '10 år', pct: 0.15 },
             ],
             '10 år': [
-                { label: 'Flytende',  pct: 0.03 },
-                { label: '3 år',      pct: 0.07 },
-                { label: '5 år',      pct: 0.25 },
-                { label: '10 år',     pct: 0.65 },
+                { label: 'Flytende', pct: 0.03 },
+                { label: '3 år', pct: 0.07 },
+                { label: '5 år', pct: 0.25 },
+                { label: '10 år', pct: 0.65 },
             ],
         };
 
@@ -232,51 +230,86 @@
         function fmtKr(v) { return fmt(Math.round(v), 0) + ' kr'; }
         function sign(v) { return v >= 0 ? '+' : ''; }
 
+        function tenorYears(label) {
+            return Number(String(label).replace(' år', '').trim()) || 0;
+        }
+
+        function interpolationBracket(remainingBindingYears) {
+            if (remainingBindingYears < 3) {
+                return { T1: 0, T2: 3, label1: 'Flytende', label2: '3 år' };
+            }
+            if (remainingBindingYears < 5) {
+                return { T1: 3, T2: 5, label1: '3 år', label2: '5 år' };
+            }
+            return { T1: 5, T2: 10, label1: '5 år', label2: '10 år' };
+        }
+
+        function weightedRate(weights) {
+            let rate = 0;
+            for (const w of weights) {
+                rate += w.pct * rateFor(w.label);
+            }
+            return rate;
+        }
+
         window.openCalcModal = function(idx) {
             const s = savingsData[idx];
             const tenor = s.tenor;
-            const weights = WEIGHTS[tenor];
-            if (!weights) return;
 
             const P = s.loan_amount;
             const rOld = s.fixed_rate;
-            const years = s.years;
-            const n = years * 12 - 2; // gjenstående mnd etter 2 mnd opphold
+            const remainingBindingYears = tenorYears(tenor);
+            const n = Math.round(remainingLoanYears * 12);
+            const legacyN = Math.max(1, remainingBindingYears * 12 - 2);
 
-            // --- 4/5. Beregn ny vektet rente ---
-            let rNew = 0;
-            const wRows = weights.map(w => {
-                const rate = rateFor(w.label);
-                const contrib = w.pct * rate;
-                rNew += contrib;
-                return { ...w, rate, contrib };
-            });
+            const bracket = interpolationBracket(remainingBindingYears);
+            const rT1 = rateFor(bracket.label1);
+            const rT2 = rateFor(bracket.label2);
+            const w1 = (bracket.T2 - remainingBindingYears) / (bracket.T2 - bracket.T1);
+            const w2 = (remainingBindingYears - bracket.T1) / (bracket.T2 - bracket.T1);
+            const rNew = rT1 * w1 + rT2 * w2;
 
-            // --- Månedlige renter ---
+            const legacyWeights = LEGACY_WEIGHTS[tenor] || [];
+            const rLegacy = weightedRate(legacyWeights);
+
             const rmOld = rOld / 100 / 12;
             const rmNew = rNew / 100 / 12;
+            const rmLegacy = rLegacy / 100 / 12;
 
-            // --- 7/8. Terminbeløp ---
             const aOld = annuity(P, rmOld, n);
             const aNew = annuity(P, rmNew, n);
             const deltaA = aNew - aOld;
 
-            // --- 10. Ikke-diskontert ---
             const nonDisc = deltaA * n;
 
-            // --- 11. Diskontert nåverdi ---
             let npv = 0;
             for (let t = 1; t <= n; t++) {
                 npv += deltaA / Math.pow(1 + rmNew, t);
             }
 
-            // --- 12. Forskjell ---
             const diffNonDiscNpv = nonDisc - npv;
+            const term1 = deltaA / Math.pow(1 + rmNew, 1);
+            const term2 = deltaA / Math.pow(1 + rmNew, 2);
+            const term3 = deltaA / Math.pow(1 + rmNew, 3);
+            const termN = deltaA / Math.pow(1 + rmNew, n);
+
+            const aOldLegacy = annuity(P, rmOld, legacyN);
+            const aNewLegacy = annuity(P, rmLegacy, legacyN);
+            const deltaLegacy = aNewLegacy - aOldLegacy;
+            const nonDiscLegacy = deltaLegacy * legacyN;
+            let npvLegacy = 0;
+            for (let t = 1; t <= legacyN; t++) {
+                npvLegacy += deltaLegacy / Math.pow(1 + rmLegacy, t);
+            }
+
+            const npvDeviation = npv - npvLegacy;
+            const nonDiscDeviation = nonDisc - nonDiscLegacy;
+            const rateDeviation = rNew - rLegacy;
+            const monthDeviation = n - legacyN;
 
             const pos = deltaA > 0;
             const clr = pos ? 'text-emerald-400' : deltaA < 0 ? 'text-red-400' : 'text-gray-300';
 
-            // --- Build HTML ---
             let h = '';
 
             function row(num, label, val, sub) {
@@ -289,78 +322,82 @@
                 }
             }
 
-            // 1. Restgjeld
             row(1, 'Restgjeld', fmtKr(P));
-
-            // 2. Opprinnelig fastrente
             row(2, 'Opprinnelig fastrente (binder nå)', fmt(rOld, 3) + ' %');
+            row(3, 'Gjenværende bindingstid (T)', fmt(remainingBindingYears, 3) + ' år');
 
-            // 3. Ny markedsrente
-            row(3, 'Ny markedsrente etter renteøkning', fmt(rNew, 3) + ' %');
-
-            // 4. Vekting
             h += '<div class="py-3 border-b border-gray-800/50">'
-               + '<p class="text-sm text-gray-300 mb-2"><span class="text-gray-600 font-mono text-xs mr-2">4.</span>Vekting (sum = 100 %)</p>'
-               + '<table class="w-full text-xs"><tbody>';
-            for (const w of wRows) {
-                h += '<tr class="border-b border-gray-800/30">'
-                   + '<td class="py-1.5 text-gray-400 w-20">' + w.label + '</td>'
-                   + '<td class="py-1.5 text-right font-mono text-gray-300 w-14">' + (w.pct * 100).toFixed(0) + ' %</td>'
-                   + '<td class="py-1.5 text-center text-gray-600 w-6">\u00d7</td>'
-                   + '<td class="py-1.5 text-right font-mono text-gray-500 w-20">' + fmt(w.rate, 3) + ' %</td>'
-                   + '<td class="py-1.5 text-center text-gray-600 w-6">=</td>'
-                   + '<td class="py-1.5 text-right font-mono text-gray-300 w-20">' + fmt(w.contrib, 4) + ' %</td>'
-                   + '</tr>';
-            }
-            h += '<tr class="border-t border-gray-600">'
-               + '<td class="py-2 text-gray-200 font-semibold">Sum</td>'
-               + '<td class="py-2 text-right font-mono text-white font-semibold">100 %</td>'
-               + '<td></td><td></td><td></td>'
+               + '<p class="text-sm text-gray-300 mb-2"><span class="text-gray-600 font-mono text-xs mr-2">4.</span>Ny markedsrente (lineær interpolasjon, kun to nærmeste punkter)</p>'
+               + '<table class="w-full text-xs"><tbody>'
+               + '<tr class="border-b border-gray-800/30">'
+               + '<td class="py-1.5 text-gray-400 w-20">T1</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300 w-14">' + fmt(bracket.T1, 3) + ' år</td>'
+               + '<td class="py-1.5 text-center text-gray-600 w-6"></td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-500 w-20">' + bracket.label1 + '</td>'
+               + '<td class="py-1.5 text-center text-gray-600 w-6"></td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300 w-20">' + fmt(rT1, 3) + ' %</td>'
+               + '</tr>'
+               + '<tr class="border-b border-gray-800/30">'
+               + '<td class="py-1.5 text-gray-400 w-20">T2</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300 w-14">' + fmt(bracket.T2, 3) + ' år</td>'
+               + '<td class="py-1.5 text-center text-gray-600 w-6"></td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-500 w-20">' + bracket.label2 + '</td>'
+               + '<td class="py-1.5 text-center text-gray-600 w-6"></td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300 w-20">' + fmt(rT2, 3) + ' %</td>'
+               + '</tr>'
+               + '<tr class="border-b border-gray-800/30">'
+               + '<td class="py-1.5 text-gray-400 w-20">Vekt T1</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300 w-14">' + fmt(w1 * 100, 2) + ' %</td>'
+               + '<td class="py-1.5 text-center text-gray-600 w-6">\u00d7</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-500 w-20">' + fmt(rT1, 3) + ' %</td>'
+               + '<td class="py-1.5 text-center text-gray-600 w-6">=</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300 w-20">' + fmt(w1 * rT1, 4) + ' %</td>'
+               + '</tr>'
+               + '<tr class="border-b border-gray-800/30">'
+               + '<td class="py-1.5 text-gray-400 w-20">Vekt T2</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300 w-14">' + fmt(w2 * 100, 2) + ' %</td>'
+               + '<td class="py-1.5 text-center text-gray-600 w-6">\u00d7</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-500 w-20">' + fmt(rT2, 3) + ' %</td>'
+               + '<td class="py-1.5 text-center text-gray-600 w-6">=</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300 w-20">' + fmt(w2 * rT2, 4) + ' %</td>'
+               + '</tr>'
+               + '<tr class="border-t border-gray-600">'
+               + '<td class="py-2 text-gray-200 font-semibold">r<sub>new</sub></td>'
                + '<td class="py-2 text-right font-mono text-white font-semibold">' + fmt(rNew, 3) + ' %</td>'
-               + '</tr></tbody></table></div>';
+               + '<td></td><td></td><td></td><td></td>'
+               + '</tr></tbody></table>'
+               + '<p class="text-[10px] text-gray-600 font-mono pt-2">r_new = r_T1 * (T2 - T)/(T2 - T1) + r_T2 * (T - T1)/(T2 - T1)</p>'
+               + '<p class="text-[10px] text-gray-600 font-mono">'
+               + 'r_new = ' + fmt(rT1, 3) + ' * (' + fmt(bracket.T2, 3) + ' - ' + fmt(remainingBindingYears, 3) + ')/(' + fmt(bracket.T2, 3) + ' - ' + fmt(bracket.T1, 3) + ')'
+               + ' + ' + fmt(rT2, 3) + ' * (' + fmt(remainingBindingYears, 3) + ' - ' + fmt(bracket.T1, 3) + ')/(' + fmt(bracket.T2, 3) + ' - ' + fmt(bracket.T1, 3) + ')</p>'
+               + '</div>';
 
-            // 5. Beregnet ny vektet rente
-            row(5, 'Beregnet ny vektet rente', fmt(rNew, 3) + ' %');
-
-            // 6. Gjenstående måneder
-            row(6, 'Gjenstående måneder (etter 2 mnd opphold)', n + ' mnd',
-                years + ' \u00d7 12 \u2212 2 = ' + n);
-
-            // 7. Terminbeløp gammel rente
+            row(5, 'Beregnet ny markedsrente', fmt(rNew, 3) + ' %');
+            row(6, 'Gjenstående måneder i lånet (n)', n + ' mnd',
+                fmt(remainingLoanYears, 2) + ' \u00d7 12 = ' + n + ' (faktisk nedbetalingstid)');
             row(7, 'Terminbeløp med gammel rente', fmtKr(aOld),
                 'r_m = ' + fmt(rOld, 3) + '% / 12 = ' + fmt(rmOld, 6)
                 + '   A = ' + fmtKr(P) + ' \u00d7 ' + fmt(rmOld, 6)
                 + ' / (1 \u2212 (1+' + fmt(rmOld, 6) + ')\u207b' + n + ')');
-
-            // 8. Terminbeløp ny rente
             row(8, 'Terminbeløp med ny rente', fmtKr(aNew),
                 'r_m = ' + fmt(rNew, 3) + '% / 12 = ' + fmt(rmNew, 6)
                 + '   A = ' + fmtKr(P) + ' \u00d7 ' + fmt(rmNew, 6)
                 + ' / (1 \u2212 (1+' + fmt(rmNew, 6) + ')\u207b' + n + ')');
 
-            // 9. Månedlig differanse
             h += '<div class="flex justify-between items-baseline py-2.5 border-b border-gray-800/50">'
                + '<span class="text-sm text-gray-300"><span class="text-gray-600 font-mono text-xs mr-2">9.</span>Månedlig differanse (\u0394A)</span>'
                + '<span class="font-mono text-sm font-semibold ' + clr + ' ml-4 text-right shrink-0">' + sign(deltaA) + fmtKr(deltaA) + '/mnd</span>'
-               + '</div>';
-            h += '<p class="text-[10px] text-gray-600 font-mono py-0.5">'
+               + '</div>'
+               + '<p class="text-[10px] text-gray-600 font-mono py-0.5">'
                + fmt(aNew, 2) + ' \u2212 ' + fmt(aOld, 2) + ' = ' + fmt(deltaA, 2) + '</p>';
 
-            // 10. Ikke-diskontert total
             row(10, 'Ikke-diskontert total (\u0394A \u00d7 n)', sign(nonDisc) + fmtKr(nonDisc),
                 fmt(deltaA, 2) + ' \u00d7 ' + n + ' = ' + fmt(nonDisc, 2));
-
-            // 11. Diskontert nåverdi
-            // Show first 3 terms as example
-            const term1 = deltaA / Math.pow(1 + rmNew, 1);
-            const term2 = deltaA / Math.pow(1 + rmNew, 2);
-            const term3 = deltaA / Math.pow(1 + rmNew, 3);
-            const termN = deltaA / Math.pow(1 + rmNew, n);
 
             h += '<div class="py-3 border-b border-gray-800/50">'
                + '<p class="text-sm text-gray-300 mb-2"><span class="text-gray-600 font-mono text-xs mr-2">11.</span>Diskontert nåverdi (finansavtaleforskriften \u00a7 2-1)</p>'
                + '<div class="bg-gray-800/50 rounded-lg p-4 space-y-2">'
-               + '<p class="text-xs text-gray-500 font-mono">NV = \u03a3<sub>t=1</sub><sup>' + n + '</sup> \u0394A / (1 + r<sub>m</sub>)<sup>t</sup></p>'
+               + '<p class="text-xs text-gray-500 font-mono">NV = \u03a3<sub>t=1</sub><sup>' + n + '</sup> \u0394A / (1 + r<sub>m,ny</sub>)<sup>t</sup></p>'
                + '<p class="text-xs text-gray-500 font-mono">r<sub>m,ny</sub> = ' + fmt(rNew, 3) + '% / 12 = ' + fmt(rmNew, 6) + '</p>'
                + '<p class="text-xs text-gray-600 font-mono mt-1">'
                + '= ' + fmt(deltaA, 2) + '/(1+' + fmt(rmNew, 6) + ')<sup>1</sup>'
@@ -372,19 +409,44 @@
                + '<p class="text-xl font-mono font-bold ' + clr + ' mt-2">' + sign(npv) + fmtKr(npv) + '</p>'
                + '</div></div>';
 
-            // 12. Forskjell
             row(12, 'Forskjell (ikke-disk. \u2212 disk.)', fmtKr(diffNonDiscNpv),
                 fmt(nonDisc, 2) + ' \u2212 ' + fmt(npv, 2) + ' = ' + fmt(diffNonDiscNpv, 2));
 
-            // Oppsummering
+            h += '<div class="py-3 border-b border-gray-800/50">'
+               + '<p class="text-sm text-gray-300 mb-2"><span class="text-gray-600 font-mono text-xs mr-2">13.</span>Avvik mot tidligere modell (heuristisk kurve + n = bindingstid \u00d7 12 \u2212 2)</p>'
+               + '<table class="w-full text-xs"><tbody>'
+               + '<tr class="border-b border-gray-800/30">'
+               + '<td class="py-1.5 text-gray-400">Tidligere ny rente</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300">' + fmt(rLegacy, 3) + ' %</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300">\u0394 ' + sign(rateDeviation) + fmt(rateDeviation, 3) + ' pp</td>'
+               + '</tr>'
+               + '<tr class="border-b border-gray-800/30">'
+               + '<td class="py-1.5 text-gray-400">Tidligere n</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300">' + legacyN + ' mnd</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300">\u0394 ' + sign(monthDeviation) + monthDeviation + ' mnd</td>'
+               + '</tr>'
+               + '<tr class="border-b border-gray-800/30">'
+               + '<td class="py-1.5 text-gray-400">Tidligere ikke-diskontert</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300">' + sign(nonDiscLegacy) + fmtKr(nonDiscLegacy) + '</td>'
+               + '<td class="py-1.5 text-right font-mono text-gray-300">\u0394 ' + sign(nonDiscDeviation) + fmtKr(nonDiscDeviation) + '</td>'
+               + '</tr>'
+               + '<tr>'
+               + '<td class="py-1.5 text-gray-200 font-semibold">Tidligere diskontert nåverdi</td>'
+               + '<td class="py-1.5 text-right font-mono text-white font-semibold">' + sign(npvLegacy) + fmtKr(npvLegacy) + '</td>'
+               + '<td class="py-1.5 text-right font-mono text-white font-semibold">\u0394 ' + sign(npvDeviation) + fmtKr(npvDeviation) + '</td>'
+               + '</tr>'
+               + '</tbody></table>'
+               + '<p class="text-[10px] text-gray-600 font-mono pt-2">Nytt oppsett bruker kun to nærmeste fastrentepunkter og amortiserer over faktisk gjenstående løpetid.</p>'
+               + '</div>';
+
             h += '<div class="mt-4 p-4 rounded-lg ' + (pos ? 'bg-emerald-900/30 border border-emerald-800/50' : 'bg-red-900/30 border border-red-800/50') + '">'
                + '<p class="text-sm font-semibold ' + (pos ? 'text-emerald-300' : 'text-red-300') + '">'
                + (pos
-                   ? 'Binding nå sparer deg ' + fmtKr(Math.abs(npv)) + ' (nåverdi) over ' + years + ' år'
-                   : 'Venting sparer deg ' + fmtKr(Math.abs(npv)) + ' (nåverdi) \u2014 neste rente forventes lavere')
+                   ? 'Binding nå sparer deg ' + fmtKr(Math.abs(npv)) + ' (nåverdi) over ' + fmt(remainingLoanYears, 2) + ' år'
+                   : 'Venting sparer deg ' + fmtKr(Math.abs(npv)) + ' (nåverdi) - neste rente forventes lavere')
                + '</p>'
                + '<p class="text-xs ' + (pos ? 'text-emerald-400/60' : 'text-red-400/60') + ' mt-1">'
-               + 'Beregnet iht. finansavtaleforskriften \u00a7 2-1 med månedlig diskontering'
+               + 'Beregnet iht. finansavtaleforskriften \u00a7 2-1 med månedlig diskontering og faktisk gjenstående løpetid'
                + '</p></div>';
 
             document.getElementById('modal-title').textContent = 'Detaljert utregning \u2013 Fast ' + tenor;

@@ -89,6 +89,17 @@ def _compute_savings(
     return results
 
 
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+def _tenor_years_from_label(label: str) -> int:
+    try:
+        return int(label.split()[0])
+    except (ValueError, IndexError):
+        return 99
+
+
 def _tenor_signal(
     tenor_key: str,
     lk: LanekassenRate | None,
@@ -96,17 +107,9 @@ def _tenor_signal(
     swap_history: list[dict],
     estimated: EstimatedRate | None,
 ) -> TenorSignal:
-    """Analyze a single tenor and produce a signal.
-
-    Primary signal: est_diff = estimated next LK fastrente - current LK fastrente.
-      Positive → next period more expensive → bind now to lock in cheaper rate.
-      Negative → next period cheaper → wait for next window.
-
-    Confirmation: swap trend shows market rate direction over last ~90 days.
-      Rising swap → market expects higher rates → confirms bind.
-      Falling swap → market expects lower rates → confirms wait.
-    """
+    """Analyze a single tenor with a score-based model."""
     label = TENOR_LABELS[tenor_key]
+    bound_years = TENOR_MAP[tenor_key]
     reasons = []
 
     # Current fixed rate
@@ -117,6 +120,8 @@ def _tenor_signal(
     # Estimated next LK fastrente
     est_next = estimated.estimated_lk if estimated else None
     est_diff = estimated.diff if estimated else None
+    bank_count = estimated.bank_count if estimated else 0
+    std_dev = estimated.std_dev if estimated else 0.0
 
     # Swap trend from historical data
     swap_trend = None
@@ -134,9 +139,7 @@ def _tenor_signal(
             swap_days = len(swap_history)
         has_trend = swap_days >= 14
 
-    # --- Build reasons (observations) ---
-
-    # Rate comparison: current vs estimated next
+    # Observations: current vs estimated next
     if current_rate is not None and est_next is not None and est_diff is not None:
         if est_diff > 0.05:
             reasons.append(
@@ -168,59 +171,82 @@ def _tenor_signal(
     elif len(swap_history) < 2:
         reasons.append(f"Mangler swap-historikk for {label} — kan ikke vurdere trend")
 
-    # --- Decision logic ---
-    # Primary: estimated rate diff
-    est_bind = est_diff is not None and est_diff > 0.05  # next period dearer
-    est_wait = est_diff is not None and est_diff < -0.05  # next period cheaper
-    est_neutral = est_diff is not None and not est_bind and not est_wait
+    # Score components
+    rate_score = _clamp((est_diff or 0.0) / 0.05, -4.0, 4.0) if est_diff is not None else 0.0
+    trend_score = _clamp((swap_trend or 0.0) / 0.10, -3.0, 3.0) if has_trend and swap_trend is not None else 0.0
 
-    # Confirmation: swap trend
-    swap_rising = has_trend and swap_trend > 0.10
-    swap_falling = has_trend and swap_trend < -0.10
+    quality_penalty = 0.0
+    if estimated is None:
+        quality_penalty += 1.2
+    else:
+        if bank_count < 3:
+            quality_penalty += 1.2
+        elif bank_count < 5:
+            quality_penalty += 0.5
+        if std_dev > 0.10:
+            quality_penalty += min(1.2, (std_dev - 0.10) / 0.10)
+
+    tenor_penalty = {3: 0.00, 5: 0.25, 10: 0.60}.get(bound_years, 0.30)
+    score = round(0.7 * rate_score + 0.3 * trend_score - quality_penalty - tenor_penalty, 3)
+
+    if quality_penalty <= 0.4:
+        data_quality = "høy"
+    elif quality_penalty <= 1.2:
+        data_quality = "middels"
+    else:
+        data_quality = "lav"
+
+    evidence = min(1.0, abs(est_diff or 0.0) / 0.20) if est_diff is not None else 0.0
+    trend_evidence = min(1.0, abs(trend_score) / 3.0) if has_trend else 0.3
+    quality_factor = max(0.0, 1.0 - (quality_penalty / 2.4))
+    confidence = 0.55 * evidence + 0.25 * trend_evidence + 0.20 * quality_factor
+    if not has_trend:
+        confidence -= 0.05
+    confidence = round(_clamp(confidence, 0.10, 0.95), 2)
+
+    reasons.append(f"Datakvalitet: {data_quality} (banker={bank_count}, std={std_dev:.3f})")
+    reasons.append(
+        "Score: "
+        f"{score:+.2f} = 0.7×ratesignal ({rate_score:+.2f}) + "
+        f"0.3×swapsignal ({trend_score:+.2f}) − "
+        f"datapåslag ({quality_penalty:.2f}) − tenorpåslag ({tenor_penalty:.2f})"
+    )
+
+    decision_margin = 1.0
+    if not has_trend:
+        decision_margin += 0.2
+    if bank_count and bank_count < 5:
+        decision_margin += 0.2
+    if std_dev > 0.15:
+        decision_margin += 0.2
 
     def _make(rec, color):
         return TenorSignal(
             tenor=label, recommendation=rec, color=color,
             current_rate=current_rate, estimated_next=est_next,
             est_diff=est_diff, swap_trend=swap_trend,
-            swap_trend_days=swap_days, reasons=reasons,
+            swap_trend_days=swap_days, score=score,
+            confidence=confidence, data_quality=data_quality,
+            reasons=reasons,
         )
 
-    # No estimate data at all → can't recommend
     if est_diff is None:
-        if has_trend and swap_rising:
-            reasons.append("Swap stiger, men mangler rateestimat — vurder å binde")
-            return _make("USIKKER", "yellow")
-        reasons.append("Utilstrekkelig data for anbefaling")
+        reasons.append("Mangler rateestimat, kan ikke gi robust anbefaling")
         return _make("USIKKER", "yellow")
 
-    # 1. Est diff says BIND + swap confirms or is neutral → BIND
-    if est_bind and (swap_rising or not swap_falling):
+    # Small moves in both primary and confirmation signals should be treated as noise.
+    if abs(est_diff) < 0.03 and abs(trend_score) < 0.8:
+        reasons.append("Små utslag i både estimat og swap-trend — signalet er svakt")
+        return _make("USIKKER", "yellow")
+
+    if score >= decision_margin:
         return _make("BIND", "green")
 
-    # 2. Est diff says BIND but swap contradicts → USIKKER
-    if est_bind and swap_falling:
-        reasons.append("Estimat peker opp, men swap-trend peker ned — motstridende signaler")
-        return _make("USIKKER", "yellow")
-
-    # 3. Est diff says WAIT + swap confirms or is neutral → VENT
-    if est_wait and (swap_falling or not swap_rising):
+    if score <= -decision_margin:
         return _make("VENT", "red")
 
-    # 4. Est diff says WAIT but swap contradicts → USIKKER
-    if est_wait and swap_rising:
-        reasons.append("Estimat peker ned, men swap-trend peker opp — motstridende signaler")
-        return _make("USIKKER", "yellow")
-
-    # 5. Neutral est diff — use swap as tiebreaker
-    if est_neutral:
-        if swap_rising:
-            reasons.append("Rateestimat omtrent uendret, men swap stiger — kan lønne seg å binde")
-            return _make("BIND", "green")
-        if swap_falling:
-            reasons.append("Rateestimat omtrent uendret, men swap faller — kan lønne seg å vente")
-            return _make("VENT", "red")
-        return _make("USIKKER", "yellow")
+    reasons.append("Score er i gråsonen — hverken klart BIND eller klart VENT")
+    return _make("USIKKER", "yellow")
 
 
 def _recommend(
@@ -228,10 +254,7 @@ def _recommend(
     swap_history: dict[str, list[dict]],
     estimates: list[EstimatedRate],
 ) -> Signal:
-    """Produce per-tenor signals and an overall recommendation.
-
-    Picks best tenor by highest est_diff (= most savings from binding now).
-    """
+    """Produce per-tenor signals and an overall recommendation."""
     est_by_label = {e.tenor: e for e in estimates}
     per_tenor = []
 
@@ -242,21 +265,62 @@ def _recommend(
         ts = _tenor_signal(tenor_key, lk, attr, history, estimated)
         per_tenor.append(ts)
 
+    if not per_tenor:
+        return Signal(
+            recommendation="USIKKER",
+            color="yellow",
+            best_tenor=None,
+            reasons=["Ingen tenor-data tilgjengelig for vurdering"],
+            per_tenor=[],
+        )
+
     bind_tenors = [t for t in per_tenor if t.recommendation == "BIND"]
     wait_tenors = [t for t in per_tenor if t.recommendation == "VENT"]
     unsure_tenors = [t for t in per_tenor if t.recommendation == "USIKKER"]
 
+    by_score = sorted(per_tenor, key=lambda t: (t.score, t.confidence), reverse=True)
     reasons = []
 
     if bind_tenors:
-        # Prefer tenor with highest est_diff (biggest savings from binding now)
-        best = max(bind_tenors, key=lambda t: t.est_diff if t.est_diff is not None else -999)
-        if best.est_diff is not None:
-            reasons.append(f"Beste binding: {best.tenor} (neste rente est. {best.est_diff:+.3f}pp høyere)")
-        else:
-            reasons.append(f"Beste binding: {best.tenor}")
-        for t in bind_tenors:
-            reasons.extend(t.reasons[:1])
+        bind_sorted = sorted(bind_tenors, key=lambda t: (t.score, t.confidence), reverse=True)
+        best = bind_sorted[0]
+        if len(bind_sorted) > 1 and abs(bind_sorted[0].score - bind_sorted[1].score) < 0.25:
+            # If two candidates are nearly tied, prefer shorter lock-in period.
+            best = min(
+                [bind_sorted[0], bind_sorted[1]],
+                key=lambda t: _tenor_years_from_label(t.tenor),
+            )
+            reasons.append("To bindingstider scorer nesten likt; velger kortere binding for lavere låserisiko.")
+
+        reasons.append(
+            f"Beste binding etter score: {best.tenor} "
+            f"(score {best.score:+.2f}, sikkerhet {best.confidence:.2f})"
+        )
+
+        strongest_wait = min((t.score for t in per_tenor), default=0.0)
+        if strongest_wait <= -1.5 and best.score < 1.5:
+            reasons.append("Ulik retning mellom tenorene gir svak total klarhet — setter USIKKER.")
+            reasons.extend(best.reasons[:2])
+            return Signal(
+                recommendation="USIKKER",
+                color="yellow",
+                best_tenor=None,
+                reasons=reasons,
+                per_tenor=per_tenor,
+            )
+
+        if best.confidence < 0.45:
+            reasons.append("Lav sikkerhet i beste signal — setter USIKKER fremfor hard BIND.")
+            reasons.extend(best.reasons[:2])
+            return Signal(
+                recommendation="USIKKER",
+                color="yellow",
+                best_tenor=None,
+                reasons=reasons,
+                per_tenor=per_tenor,
+            )
+
+        reasons.extend(best.reasons[:2])
         return Signal(
             recommendation=f"BIND {best.tenor.upper()}",
             color="green",
@@ -265,10 +329,26 @@ def _recommend(
             per_tenor=per_tenor,
         )
 
-    if wait_tenors:
-        reasons.append("Estimert neste fastrente er lavere — vent til neste vindu")
-        for t in wait_tenors:
-            reasons.extend(t.reasons[:1])
+    if wait_tenors and not bind_tenors:
+        best_wait = min(wait_tenors, key=lambda t: (t.score, -t.confidence))
+        reasons.append(
+            f"Sterkeste waits-signal: {best_wait.tenor} "
+            f"(score {best_wait.score:+.2f}, sikkerhet {best_wait.confidence:.2f})"
+        )
+        reasons.append("Flere tenor-signaler peker mot lavere neste fastrente.")
+
+        if best_wait.confidence < 0.45:
+            reasons.append("Signalet er ikke robust nok — setter USIKKER.")
+            reasons.extend(best_wait.reasons[:2])
+            return Signal(
+                recommendation="USIKKER",
+                color="yellow",
+                best_tenor=None,
+                reasons=reasons,
+                per_tenor=per_tenor,
+            )
+
+        reasons.extend(best_wait.reasons[:2])
         return Signal(
             recommendation="VENT",
             color="red",
@@ -278,9 +358,10 @@ def _recommend(
         )
 
     if unsure_tenors:
-        reasons.append("Motstridende signaler eller utilstrekkelig data")
-        for t in unsure_tenors:
-            reasons.extend(t.reasons[:1])
+        top = by_score[0]
+        reasons.append("Ingen tenor har sterk nok score til tydelig BIND/VENT.")
+        reasons.append(f"Høyeste score: {top.tenor} ({top.score:+.2f}, sikkerhet {top.confidence:.2f})")
+        reasons.extend(top.reasons[:2])
         return Signal(
             recommendation="USIKKER",
             color="yellow",
@@ -289,7 +370,6 @@ def _recommend(
             per_tenor=per_tenor,
         )
 
-    # Fallback (shouldn't normally happen)
     reasons.append("Ingen sterke signaler i noen retning")
     return Signal(
         recommendation="USIKKER",
@@ -300,7 +380,10 @@ def _recommend(
     )
 
 
-async def _fetch_all_data(loan_amount: int) -> dict:
+async def _fetch_all_data(
+    loan_amount: int,
+    remaining_years: int = settings.default_remaining_years,
+) -> dict:
     lk_rates: list[LanekassenRate] = []
     swap_rates = []
     products_by_tenor: dict[int, list] = {}
@@ -344,6 +427,26 @@ async def _fetch_all_data(loan_amount: int) -> dict:
     cw = current_window()
     nw = next_window()
     days_to_window = days_until_next_window()
+    now_dt = datetime.now()
+    window_countdown_target = None
+    window_countdown_seconds = None
+    window_countdown_label = None
+
+    if cw:
+        countdown_day = cw[1] - timedelta(days=1)
+        window_countdown_target = datetime(
+            countdown_day.year,
+            countdown_day.month,
+            countdown_day.day,
+            23,
+            59,
+            0,
+        )
+        window_countdown_seconds = max(
+            0,
+            int((window_countdown_target - now_dt).total_seconds()),
+        )
+        window_countdown_label = window_countdown_target.strftime("%d. %B %Y kl. %H:%M")
 
     return {
         "lanekassen": lk_current,
@@ -356,9 +459,13 @@ async def _fetch_all_data(loan_amount: int) -> dict:
         "savings": savings,
         "signal": signal,
         "loan_amount": loan_amount,
+        "remaining_years": remaining_years,
         "current_window": cw,
         "next_window": nw,
         "days_to_window": days_to_window,
+        "window_countdown_target": window_countdown_target,
+        "window_countdown_seconds": window_countdown_seconds,
+        "window_countdown_label": window_countdown_label,
         "today": date.today(),
     }
 
@@ -371,17 +478,28 @@ async def health():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, belop: int = Query(default=settings.default_loan_amount)):
-    data = await _fetch_all_data(belop)
+async def dashboard(
+    request: Request,
+    belop: int = Query(default=settings.default_loan_amount),
+    remaining_years: int = Query(default=settings.default_remaining_years, ge=1, le=40),
+):
+    data = await _fetch_all_data(belop, remaining_years=remaining_years)
     return templates.TemplateResponse("dashboard.html", {"request": request, **data})
 
 
 @app.get("/api/dashboard")
-async def api_dashboard(belop: int = Query(default=settings.default_loan_amount)):
-    data = await _fetch_all_data(belop)
+async def api_dashboard(
+    belop: int = Query(default=settings.default_loan_amount),
+    remaining_years: int = Query(default=settings.default_remaining_years, ge=1, le=40),
+):
+    data = await _fetch_all_data(belop, remaining_years=remaining_years)
     result = {
         "loan_amount": data["loan_amount"],
+        "remaining_years": data["remaining_years"],
         "today": data["today"].isoformat(),
+        "window_countdown_target": data["window_countdown_target"].isoformat() if data["window_countdown_target"] else None,
+        "window_countdown_seconds": data["window_countdown_seconds"],
+        "window_countdown_label": data["window_countdown_label"],
         "lanekassen": {
             "period": data["lanekassen"].period,
             "floating": data["lanekassen"].floating,
@@ -418,7 +536,8 @@ async def api_dashboard(belop: int = Query(default=settings.default_loan_amount)
             "per_tenor": [
                 {"tenor": t.tenor, "recommendation": t.recommendation, "color": t.color,
                  "current_rate": t.current_rate, "estimated_next": t.estimated_next,
-                 "est_diff": t.est_diff, "swap_trend": t.swap_trend}
+                 "est_diff": t.est_diff, "swap_trend": t.swap_trend,
+                 "score": t.score, "confidence": t.confidence, "data_quality": t.data_quality}
                 for t in data["signal"].per_tenor
             ],
         },
@@ -486,7 +605,11 @@ async def partial_banker(request: Request):
 
 
 @app.get("/partials/besparelse", response_class=HTMLResponse)
-async def partial_besparelse(request: Request, belop: int = Query(default=settings.default_loan_amount)):
+async def partial_besparelse(
+    request: Request,
+    belop: int = Query(default=settings.default_loan_amount),
+    remaining_years: int = Query(default=settings.default_remaining_years, ge=1, le=40),
+):
     try:
         rates = await lanekassen.fetch_rates()
         lk = rates[0] if rates else None
@@ -504,6 +627,7 @@ async def partial_besparelse(request: Request, belop: int = Query(default=settin
         "request": request,
         "savings": savings,
         "loan_amount": belop,
+        "remaining_years": remaining_years,
         "lanekassen": lk,
         "estimates": estimates,
     })

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     port: int = 8000
     db_path: str = "data/studielan.db"
     default_loan_amount: int = 500_000
+    default_remaining_years: int = 20
     lanekassen_margin: float = 0.15  # Lånekassen trekker fra 0.15pp
 
     # Lånekassen
