@@ -6,6 +6,9 @@ services:
       - "80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      - AUTH_USER=${AUTH_USER:-admin}
+      - AUTH_HASH=${AUTH_HASH}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.studielan.rule=Host(`studielan.77-42-36-80.sslip.io`)"
