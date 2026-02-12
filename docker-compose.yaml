@@ -8,7 +8,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.studielan.rule=Host(`studielan.77.42.36.80.nip.io`)"
+      - "traefik.http.routers.studielan.rule=Host(`studielan.77-42-36-80.sslip.io`)"
       - "traefik.http.routers.studielan.entrypoints=http,https"
       - "traefik.http.routers.studielan.tls=true"
       - "traefik.http.routers.studielan.tls.certresolver=letsencrypt"
