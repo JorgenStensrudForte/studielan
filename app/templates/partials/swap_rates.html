@@ -47,19 +47,41 @@
         Chart.defaults.borderColor = '#374151';
 
         const history = {{ swap_history | tojson }};
-        const colors = { '3 Yr': '#34d399', '5 Yr': '#60a5fa', '10 Yr': '#a78bfa' };
-        const datasets = [];
+        const styles = {
+            '3 Yr': { color: '#34d399', dash: [],      width: 2.5 },
+            '5 Yr': { color: '#60a5fa', dash: [6, 3],  width: 2.5 },
+            '10 Yr':{ color: '#a78bfa', dash: [2, 2],  width: 2.5 },
+        };
 
+        // Build shared date labels from the longest series
+        let allDates = [];
+        const dataByTenor = {};
         for (const [tenor, points] of Object.entries(history)) {
             if (points.length < 2) continue;
+            const mapped = points.map(p => {
+                const d = p.observed_at.split('T')[0];
+                // Format as "dd.mm"
+                const parts = d.split('-');
+                return { date: d, label: parts[2] + '.' + parts[1], rate: p.rate };
+            });
+            dataByTenor[tenor] = mapped;
+            if (mapped.length > allDates.length) {
+                allDates = mapped.map(m => m.label);
+            }
+        }
+
+        const datasets = [];
+        for (const [tenor, mapped] of Object.entries(dataByTenor)) {
+            const s = styles[tenor] || { color: '#9ca3af', dash: [], width: 2 };
             datasets.push({
                 label: tenor,
-                data: points.map(p => ({ x: p.observed_at.split('T')[0], y: p.rate })),
-                borderColor: colors[tenor] || '#9ca3af',
+                data: mapped.map(m => m.rate),
+                borderColor: s.color,
                 backgroundColor: 'transparent',
-                borderWidth: 2,
+                borderWidth: s.width,
+                borderDash: s.dash,
                 pointRadius: 0,
-                pointHitRadius: 6,
+                pointHitRadius: 8,
                 tension: 0.3,
             });
         }
@@ -69,24 +91,35 @@
             if (ctx._chartInstance) ctx._chartInstance.destroy();
             const chart = new Chart(ctx, {
                 type: 'line',
-                data: { datasets },
+                data: { labels: allDates, datasets },
                 options: {
                     responsive: true,
                     aspectRatio: 2.2,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { labels: { boxWidth: 12, font: { size: 11 } } },
+                        legend: {
+                            labels: {
+                                usePointStyle: true,
+                                pointStyle: 'line',
+                                boxWidth: 20,
+                                font: { size: 11 },
+                            },
+                        },
                         tooltip: {
                             callbacks: {
-                                label: ctx => ctx.dataset.label + ': ' + ctx.raw.y.toFixed(2) + '%',
+                                label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(2) + '%',
                             }
                         }
                     },
                     scales: {
                         x: {
-                            type: 'category',
                             grid: { display: false },
-                            ticks: { maxTicksLimit: 8, font: { size: 10 } },
+                            ticks: {
+                                maxTicksLimit: 10,
+                                font: { size: 10 },
+                                maxRotation: 45,
+                                minRotation: 0,
+                            },
                         },
                         y: {
                             grid: { color: '#1f2937' },
