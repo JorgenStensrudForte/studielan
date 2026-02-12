@@ -504,6 +504,8 @@ async def partial_besparelse(request: Request, belop: int = Query(default=settin
         "request": request,
         "savings": savings,
         "loan_amount": belop,
+        "lanekassen": lk,
+        "estimates": estimates,
     })
 
 
