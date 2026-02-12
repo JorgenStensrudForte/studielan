@@ -2,15 +2,12 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
+    expose:
+      - "80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
     environment:
-      - DOMAIN=${DOMAIN:-localhost}
+      - DOMAIN=:80
       - AUTH_USER=${AUTH_USER:-admin}
       - AUTH_HASH=${AUTH_HASH}
     depends_on:
@@ -28,7 +25,3 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-volumes:
-  caddy_data:
-  caddy_config:
