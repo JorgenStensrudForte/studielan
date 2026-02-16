@@ -34,7 +34,7 @@ class BankProduct:
 class EstimatedRate:
     """Estimert neste Lånekassen-rente basert på topp-5 bankrenter."""
     tenor: str  # "3 år", "5 år", "10 år"
-    avg_top5: float  # snitt topp-5 effektive bankrenter
+    avg_top5: float  # snitt topp-5 nominelle bankrenter
     estimated_lk: float  # avg_top5 - 0.15pp
     current_lk: float | None  # nåværende Lånekassen-rente for denne tenoren
     diff: float | None  # estimated_lk - current_lk (positiv = renta forventes opp)

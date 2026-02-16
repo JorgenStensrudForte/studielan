@@ -9,7 +9,7 @@ Dashboard som hjelper deg vurdere om du bor binde renta pa studielanet hos Lanek
 - Henter gjeldende renter fra **Lanekassen** (flytende + fast 3/5/10 ar)
 - Henter live **swap-renter** fra SEB (markedets renteforventning)
 - Henter topp-5 **bankrenter** fra Finansportalen per bindingsperiode
-- **Estimerer neste Lanekassen-fastrente** (snitt topp-5 bankrenter - 0.15pp)
+- **Estimerer neste Lanekassen-fastrente** (snitt topp-5 nominelle bankrenter - 0.15pp)
 - Beregner **besparelse** ved a binde na vs vente til neste vindu
 - Viser detaljert **NPV-utregning** iht. finansavtaleforskriften § 2-1
 - Gir en **anbefaling** per tenor basert pa estimert rateendring + swap-trend
@@ -113,7 +113,7 @@ Alle datakilder er offentlige APIer. Ingen API-nokler eller autentisering kreves
 ## Hvordan funker det?
 
 1. **Lanekassen setter renta** basert pa snitt topp-5 bankrenter - 0.15pp
-2. **Estimert neste rente** = snitt topp-5 bankrenter na - 0.15pp
+2. **Estimert neste rente** = snitt topp-5 nominelle bankrenter na - 0.15pp
 3. **Besparelse** = NPV av differansen mellom a binde na vs estimert neste rente
 4. **Anbefaling** bruker estimert rateendring som primarsignal og swap-trend som bekreftelse
 

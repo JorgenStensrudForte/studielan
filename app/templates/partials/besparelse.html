@@ -3,7 +3,7 @@
         <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Bind nå vs vent</h2>
         <span class="text-xs text-gray-500">ved {{ "{:,.0f}".format(loan_amount).replace(",", " ") }} kr</span>
     </div>
-    <p class="text-xs text-gray-600 mb-4">Basert på estimert neste Lånekassen-fastrente fra topp-5 banker</p>
+    <p class="text-xs text-gray-600 mb-4">Basert på estimert neste Lånekassen-fastrente fra topp-5 banker (nominell)</p>
     {% if savings %}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {% for s in savings %}
@@ -31,7 +31,7 @@
                 {{ "{:+,.0f}".format(s.total_diff).replace(",", " ") }} kr totalt over {{ s.years }} år
             </p>
             <p class="text-xs text-gray-600 mt-1">
-                {{ "%.3f"|format(s.fixed_rate) }}% nå vs est. {{ "%.3f"|format(s.estimated_next_rate) }}% neste
+                {{ "%.3f"|format(s.fixed_rate) }}% nominell nå vs est. {{ "%.3f"|format(s.estimated_next_rate) }}% nominell neste
             </p>
             <p class="text-[10px] text-gray-600 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">Klikk for detaljert utregning</p>
         </div>
@@ -45,7 +45,7 @@
             <canvas id="savings-bar-chart"></canvas>
         </div>
         <div class="bg-gray-800/50 rounded-lg p-4">
-            <p class="text-xs text-gray-500 mb-2">Nåværende vs estimert neste fastrente (%)</p>
+            <p class="text-xs text-gray-500 mb-2">Nåværende vs estimert neste fastrente (nominell %)</p>
             <canvas id="rate-compare-chart"></canvas>
         </div>
     </div>

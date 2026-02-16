@@ -63,7 +63,8 @@ async def fetch_products_by_tenor(top_n: int = 5) -> dict[int, list[BankProduct]
     result = {}
     for years in (3, 5, 10):
         tenor_products = by_tenor.get(years, [])
-        tenor_products.sort(key=lambda p: p.effective_rate)
+        # Keep one consistent basis against Lånekassen rates (nominal).
+        tenor_products.sort(key=lambda p: p.nominal_rate)
         result[years] = tenor_products[:top_n]
 
     return result
@@ -73,7 +74,7 @@ def estimate_next_lk_rates(
     products_by_tenor: dict[int, list[BankProduct]],
     current_lk: "LanekassenRate | None" = None,
 ) -> list[EstimatedRate]:
-    """Estimate next Lånekassen rates: avg top-5 effective rate - 0.15pp."""
+    """Estimate next Lånekassen rates: avg top-5 nominal rate - 0.15pp."""
     from app.models import LanekassenRate  # avoid circular
 
     lk_attr_map = {3: "fixed_3y", 5: "fixed_5y", 10: "fixed_10y"}
@@ -86,7 +87,7 @@ def estimate_next_lk_rates(
         if not top5:
             continue
 
-        rates = [p.effective_rate for p in top5]
+        rates = [p.nominal_rate for p in top5]
         avg = sum(rates) / len(rates)
         estimated_lk = round(avg - settings.lanekassen_margin, 3)
         std_dev = round(statistics.stdev(rates), 3) if len(rates) >= 2 else 0.0
