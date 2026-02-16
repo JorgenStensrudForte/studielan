@@ -265,11 +265,27 @@ def _recommend(
         ts = _tenor_signal(tenor_key, lk, attr, history, estimated)
         per_tenor.append(ts)
 
+    with_estimate = [t for t in per_tenor if t.est_diff is not None]
+    max_gain_recommendation = None
+    max_gain_detail = None
+    if with_estimate:
+        gain = max(with_estimate, key=lambda t: abs(t.est_diff or 0.0))
+        gain_diff = gain.est_diff or 0.0
+        if abs(gain_diff) >= 0.01:
+            if gain_diff >= 0:
+                max_gain_recommendation = f"BIND {gain.tenor.upper()}"
+                max_gain_detail = f"størst estimert gevinst: {gain_diff:+.3f}pp vs dagens rente"
+            else:
+                max_gain_recommendation = f"VENT ({gain.tenor})"
+                max_gain_detail = f"størst estimert gevinst ved venting: {abs(gain_diff):.3f}pp lavere neste rente"
+
     if not per_tenor:
         return Signal(
             recommendation="USIKKER",
             color="yellow",
             best_tenor=None,
+            max_gain_recommendation=max_gain_recommendation,
+            max_gain_detail=max_gain_detail,
             reasons=["Ingen tenor-data tilgjengelig for vurdering"],
             per_tenor=[],
         )
@@ -305,6 +321,8 @@ def _recommend(
                 recommendation="USIKKER",
                 color="yellow",
                 best_tenor=None,
+                max_gain_recommendation=max_gain_recommendation,
+                max_gain_detail=max_gain_detail,
                 reasons=reasons,
                 per_tenor=per_tenor,
             )
@@ -316,6 +334,8 @@ def _recommend(
                 recommendation="USIKKER",
                 color="yellow",
                 best_tenor=None,
+                max_gain_recommendation=max_gain_recommendation,
+                max_gain_detail=max_gain_detail,
                 reasons=reasons,
                 per_tenor=per_tenor,
             )
@@ -325,6 +345,8 @@ def _recommend(
             recommendation=f"BIND {best.tenor.upper()}",
             color="green",
             best_tenor=best.tenor,
+            max_gain_recommendation=max_gain_recommendation,
+            max_gain_detail=max_gain_detail,
             reasons=reasons,
             per_tenor=per_tenor,
         )
@@ -344,6 +366,8 @@ def _recommend(
                 recommendation="USIKKER",
                 color="yellow",
                 best_tenor=None,
+                max_gain_recommendation=max_gain_recommendation,
+                max_gain_detail=max_gain_detail,
                 reasons=reasons,
                 per_tenor=per_tenor,
             )
@@ -353,6 +377,8 @@ def _recommend(
             recommendation="VENT",
             color="red",
             best_tenor=None,
+            max_gain_recommendation=max_gain_recommendation,
+            max_gain_detail=max_gain_detail,
             reasons=reasons,
             per_tenor=per_tenor,
         )
@@ -366,6 +392,8 @@ def _recommend(
             recommendation="USIKKER",
             color="yellow",
             best_tenor=None,
+            max_gain_recommendation=max_gain_recommendation,
+            max_gain_detail=max_gain_detail,
             reasons=reasons,
             per_tenor=per_tenor,
         )
@@ -375,6 +403,8 @@ def _recommend(
         recommendation="USIKKER",
         color="yellow",
         best_tenor=None,
+        max_gain_recommendation=max_gain_recommendation,
+        max_gain_detail=max_gain_detail,
         reasons=reasons,
         per_tenor=per_tenor,
     )
@@ -428,6 +458,7 @@ async def _fetch_all_data(
     nw = next_window()
     days_to_window = days_until_next_window()
     now_dt = datetime.now()
+    banker_updated_at = now_dt
     window_countdown_target = None
     window_countdown_seconds = None
     window_countdown_label = None
@@ -455,6 +486,7 @@ async def _fetch_all_data(
         "swap_history": swap_history,
         "has_swap_history": has_swap_history,
         "products_by_tenor": products_by_tenor,
+        "banker_updated_at": banker_updated_at,
         "estimates": estimates,
         "savings": savings,
         "signal": signal,
@@ -518,6 +550,7 @@ async def api_dashboard(
             ]
             for years, products in data["products_by_tenor"].items()
         },
+        "banker_updated_at": data["banker_updated_at"].isoformat() if data.get("banker_updated_at") else None,
         "estimates": [
             {"tenor": e.tenor, "avg_top5": e.avg_top5, "estimated_lk": e.estimated_lk,
              "current_lk": e.current_lk, "diff": e.diff, "std_dev": e.std_dev}
@@ -532,6 +565,8 @@ async def api_dashboard(
             "recommendation": data["signal"].recommendation,
             "color": data["signal"].color,
             "best_tenor": data["signal"].best_tenor,
+            "max_gain_recommendation": data["signal"].max_gain_recommendation,
+            "max_gain_detail": data["signal"].max_gain_detail,
             "reasons": data["signal"].reasons,
             "per_tenor": [
                 {"tenor": t.tenor, "recommendation": t.recommendation, "color": t.color,
@@ -584,6 +619,7 @@ async def partial_swap(request: Request):
 
 @app.get("/partials/banker", response_class=HTMLResponse)
 async def partial_banker(request: Request):
+    updated_at = datetime.now()
     try:
         lk_rates = await lanekassen.fetch_rates()
         lk = lk_rates[0] if lk_rates else None
@@ -600,6 +636,7 @@ async def partial_banker(request: Request):
     return templates.TemplateResponse("partials/banker.html", {
         "request": request,
         "products_by_tenor": products_by_tenor,
+        "banker_updated_at": updated_at,
         "estimates": estimates,
     })
 

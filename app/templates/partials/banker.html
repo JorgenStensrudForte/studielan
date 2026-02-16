@@ -1,7 +1,9 @@
 <div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
     <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Topp 5 fastrente-banker per bindingsperiode</h2>
-        <span class="text-xs text-gray-500">Finansportalen</span>
+        <span class="text-xs text-gray-500">
+            Finansportalen{% if banker_updated_at %} &middot; sist oppdatert {{ banker_updated_at.strftime('%d.%m.%Y %H:%M:%S') }}{% endif %}
+        </span>
     </div>
 
     {% if estimates %}

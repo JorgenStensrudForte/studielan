@@ -77,5 +77,7 @@ class Signal:
     recommendation: str  # "BIND 3 ÅR", "VENT", "HOLD FLYTENDE"
     color: str  # "green", "yellow", "red"
     best_tenor: str | None  # hvilken tenor er best å binde
+    max_gain_recommendation: str | None = None  # mest aggressive gevinstvalg
+    max_gain_detail: str | None = None  # forklaring til maks gevinst
     reasons: list[str] = field(default_factory=list)
     per_tenor: list[TenorSignal] = field(default_factory=list)

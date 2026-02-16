@@ -17,6 +17,12 @@
             {{ signal.recommendation }}
         </span>
     </div>
+    {% if signal.max_gain_recommendation %}
+    <p class="text-xs text-gray-400 mb-3">
+        Maksimal gevinst (aggressiv): <span class="font-semibold text-gray-200">{{ signal.max_gain_recommendation }}</span>
+        {% if signal.max_gain_detail %}- {{ signal.max_gain_detail }}{% endif %}
+    </p>
+    {% endif %}
     <ul class="space-y-1">
         {% for reason in signal.reasons %}
         <li class="text-sm text-gray-300 flex items-start gap-2">
