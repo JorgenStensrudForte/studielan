@@ -257,7 +257,7 @@
 
 <!-- Recommendation -->
 <div id="vurdering-panel"
-     hx-get="/partials/vurdering"
+     hx-get="/partials/vurdering?belop={{ loan_amount }}"
      hx-trigger="every 60s"
      hx-swap="innerHTML">
     {% include "partials/vurdering.html" %}

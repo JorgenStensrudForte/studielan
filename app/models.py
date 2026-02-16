@@ -64,6 +64,7 @@ class TenorSignal:
     current_rate: float | None  # nåværende LK-fastrente
     estimated_next: float | None  # estimert neste LK-fastrente
     est_diff: float | None  # estimated_next - current_rate (positiv = neste dyrere → bind nå)
+    total_diff_kr: int | None  # total forskjell i kroner over bindingsperioden
     swap_trend: float | None  # endring siste 90d
     swap_trend_days: int  # faktisk antall dager med data
     score: float = 0.0  # samlescore (høyere = sterkere case for binding)

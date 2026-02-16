@@ -106,6 +106,7 @@ def _tenor_signal(
     lk_attr: str,
     swap_history: list[dict],
     estimated: EstimatedRate | None,
+    loan_amount: int,
 ) -> TenorSignal:
     """Analyze a single tenor with a score-based model."""
     label = TENOR_LABELS[tenor_key]
@@ -122,6 +123,9 @@ def _tenor_signal(
     est_diff = estimated.diff if estimated else None
     bank_count = estimated.bank_count if estimated else 0
     std_dev = estimated.std_dev if estimated else 0.0
+    total_diff_kr = None
+    if est_diff is not None:
+        total_diff_kr = round((est_diff / 100) * loan_amount * bound_years)
 
     # Swap trend from historical data
     swap_trend = None
@@ -224,7 +228,8 @@ def _tenor_signal(
         return TenorSignal(
             tenor=label, recommendation=rec, color=color,
             current_rate=current_rate, estimated_next=est_next,
-            est_diff=est_diff, swap_trend=swap_trend,
+            est_diff=est_diff, total_diff_kr=total_diff_kr,
+            swap_trend=swap_trend,
             swap_trend_days=swap_days, score=score,
             confidence=confidence, data_quality=data_quality,
             reasons=reasons,
@@ -253,6 +258,7 @@ def _recommend(
     lk: LanekassenRate | None,
     swap_history: dict[str, list[dict]],
     estimates: list[EstimatedRate],
+    loan_amount: int = settings.default_loan_amount,
 ) -> Signal:
     """Produce per-tenor signals and an overall recommendation."""
     est_by_label = {e.tenor: e for e in estimates}
@@ -262,7 +268,7 @@ def _recommend(
         label = TENOR_LABELS[tenor_key]
         history = swap_history.get(tenor_key, [])
         estimated = est_by_label.get(label)
-        ts = _tenor_signal(tenor_key, lk, attr, history, estimated)
+        ts = _tenor_signal(tenor_key, lk, attr, history, estimated, loan_amount=loan_amount)
         per_tenor.append(ts)
 
     with_estimate = [t for t in per_tenor if t.est_diff is not None]
@@ -451,7 +457,7 @@ async def _fetch_all_data(
     savings = _compute_savings(lk_current, loan_amount, estimates) if lk_current else []
 
     # Recommendation
-    signal = _recommend(lk_current, swap_history, estimates)
+    signal = _recommend(lk_current, swap_history, estimates, loan_amount=loan_amount)
 
     # Application window
     cw = current_window()
@@ -571,7 +577,7 @@ async def api_dashboard(
             "per_tenor": [
                 {"tenor": t.tenor, "recommendation": t.recommendation, "color": t.color,
                  "current_rate": t.current_rate, "estimated_next": t.estimated_next,
-                 "est_diff": t.est_diff, "swap_trend": t.swap_trend,
+                 "est_diff": t.est_diff, "total_diff_kr": t.total_diff_kr, "swap_trend": t.swap_trend,
                  "score": t.score, "confidence": t.confidence, "data_quality": t.data_quality}
                 for t in data["signal"].per_tenor
             ],
@@ -671,7 +677,10 @@ async def partial_besparelse(
 
 
 @app.get("/partials/vurdering", response_class=HTMLResponse)
-async def partial_vurdering(request: Request):
+async def partial_vurdering(
+    request: Request,
+    belop: int = Query(default=settings.default_loan_amount),
+):
     swap_rates = []
     try:
         swap_rates = await seb.fetch_swap_rates()
@@ -694,7 +703,7 @@ async def partial_vurdering(request: Request):
         products_by_tenor = {}
 
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
-    signal = _recommend(lk, swap_history, estimates)
+    signal = _recommend(lk, swap_history, estimates, loan_amount=belop)
 
     return templates.TemplateResponse("partials/vurdering.html", {
         "request": request,
