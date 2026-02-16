@@ -100,6 +100,66 @@ def _tenor_years_from_label(label: str) -> int:
         return 99
 
 
+def _anchor_rate_for_days(history: list[dict], days: int, now_dt: datetime) -> float | None:
+    """Pick a best-effort anchor rate around N days ago from ascending history."""
+    if len(history) < 2:
+        return None
+
+    target = now_dt - timedelta(days=days)
+    parsed: list[tuple[datetime, float]] = []
+    for point in history:
+        observed_raw = point.get("observed_at")
+        rate_raw = point.get("rate")
+        if observed_raw is None or rate_raw is None:
+            continue
+        try:
+            parsed.append((datetime.fromisoformat(observed_raw), float(rate_raw)))
+        except (TypeError, ValueError):
+            continue
+
+    if len(parsed) < 2:
+        return None
+
+    # Prefer the latest observation at or before target (closest in the past).
+    before_target = [rate for observed, rate in parsed if observed <= target]
+    if before_target:
+        return before_target[-1]
+
+    # If we just barely miss the target boundary, use the oldest available point.
+    oldest_observed, oldest_rate = parsed[0]
+    if oldest_observed <= target + timedelta(days=2):
+        return oldest_rate
+    return None
+
+
+def _swap_change_for_days(
+    history: list[dict], current_rate: float, days: int, now_dt: datetime
+) -> float | None:
+    anchor = _anchor_rate_for_days(history, days=days, now_dt=now_dt)
+    if anchor is None:
+        return None
+    return round(current_rate - anchor, 3)
+
+
+def _build_swap_rows(swap_rates: list, swap_history: dict[str, list[dict]]) -> list[dict]:
+    now_dt = datetime.now()
+    rows = []
+    for rate in swap_rates:
+        history = swap_history.get(rate.tenor, [])
+        rows.append(
+            {
+                "tenor": rate.tenor,
+                "rate": rate.rate,
+                "change_today": rate.change_today,
+                "change_5d": _swap_change_for_days(history, rate.rate, days=5, now_dt=now_dt),
+                "change_10d": _swap_change_for_days(history, rate.rate, days=10, now_dt=now_dt),
+                "change_30d": _swap_change_for_days(history, rate.rate, days=30, now_dt=now_dt),
+                "change_90d": _swap_change_for_days(history, rate.rate, days=90, now_dt=now_dt),
+            }
+        )
+    return rows
+
+
 def _tenor_signal(
     tenor_key: str,
     lk: LanekassenRate | None,
@@ -449,6 +509,7 @@ async def _fetch_all_data(
         swap_history[tenor] = await db.get_swap_history(tenor, days=90)
         if len(swap_history[tenor]) >= 2:
             has_swap_history = True
+    swap_rows = _build_swap_rows(swap_rates, swap_history)
 
     # Estimated next Lånekassen rates
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_current)
@@ -489,6 +550,7 @@ async def _fetch_all_data(
         "lanekassen": lk_current,
         "lanekassen_all": lk_rates[:6],
         "swap_rates": swap_rates,
+        "swap_rows": swap_rows,
         "swap_history": swap_history,
         "has_swap_history": has_swap_history,
         "products_by_tenor": products_by_tenor,
@@ -549,6 +611,7 @@ async def api_dashboard(
             {"tenor": r.tenor, "rate": r.rate, "change_today": r.change_today}
             for r in data["swap_rates"]
         ],
+        "swap_rows": data["swap_rows"],
         "products_by_tenor": {
             str(years): [
                 {"bank": p.bank, "nominal_rate": p.nominal_rate, "effective_rate": p.effective_rate, "period": p.period}
@@ -615,10 +678,12 @@ async def partial_swap(request: Request):
     swap_history = {}
     for tenor in ["3 Yr", "5 Yr", "10 Yr"]:
         swap_history[tenor] = await db.get_swap_history(tenor, days=90)
+    swap_rows = _build_swap_rows(rates, swap_history)
 
     return templates.TemplateResponse("partials/swap_rates.html", {
         "request": request,
         "swap_rates": rates,
+        "swap_rows": swap_rows,
         "swap_history": swap_history,
     })
 

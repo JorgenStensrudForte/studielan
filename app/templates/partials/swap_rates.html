@@ -10,23 +10,36 @@
                 <th class="text-left pb-2">Tenor</th>
                 <th class="text-right pb-2">Rente</th>
                 <th class="text-right pb-2">Dag</th>
+                <th class="text-right pb-2">5d</th>
+                <th class="text-right pb-2">10d</th>
+                <th class="text-right pb-2">30d</th>
                 <th class="text-right pb-2">90d</th>
             </tr>
         </thead>
         <tbody class="text-gray-200">
-            {% for rate in swap_rates %}
-            {% set history = swap_history.get(rate.tenor, []) %}
-            {% set change_90d = (rate.rate - history[0]["rate"]) if history|length > 1 else 0 %}
+            {% for row in swap_rows %}
             <tr class="border-t border-gray-800/50">
-                <td class="py-2">{{ rate.tenor }}</td>
-                <td class="text-right font-mono font-medium">{{ "%.2f"|format(rate.rate) }}%</td>
+                <td class="py-2">{{ row.tenor }}</td>
+                <td class="text-right font-mono font-medium">{{ "%.2f"|format(row.rate) }}%</td>
                 <td class="text-right font-mono text-sm
-                    {% if rate.change_today > 0 %}text-emerald-400{% elif rate.change_today < 0 %}text-red-400{% else %}text-gray-500{% endif %}">
-                    {% if rate.change_today != 0 %}{{ "%+.2f"|format(rate.change_today) }}{% else %}&mdash;{% endif %}
+                    {% if row.change_today > 0 %}text-emerald-400{% elif row.change_today < 0 %}text-red-400{% else %}text-gray-500{% endif %}">
+                    {% if row.change_today != 0 %}{{ "%+.2f"|format(row.change_today) }}{% else %}&mdash;{% endif %}
                 </td>
                 <td class="text-right font-mono text-sm
-                    {% if change_90d > 0.05 %}text-emerald-400{% elif change_90d < -0.05 %}text-red-400{% else %}text-gray-500{% endif %}">
-                    {% if change_90d != 0 %}{{ "%+.2f"|format(change_90d) }}{% else %}&mdash;{% endif %}
+                    {% if row.change_5d is not none and row.change_5d > 0.05 %}text-emerald-400{% elif row.change_5d is not none and row.change_5d < -0.05 %}text-red-400{% else %}text-gray-500{% endif %}">
+                    {% if row.change_5d is not none and row.change_5d != 0 %}{{ "%+.2f"|format(row.change_5d) }}{% else %}&mdash;{% endif %}
+                </td>
+                <td class="text-right font-mono text-sm
+                    {% if row.change_10d is not none and row.change_10d > 0.05 %}text-emerald-400{% elif row.change_10d is not none and row.change_10d < -0.05 %}text-red-400{% else %}text-gray-500{% endif %}">
+                    {% if row.change_10d is not none and row.change_10d != 0 %}{{ "%+.2f"|format(row.change_10d) }}{% else %}&mdash;{% endif %}
+                </td>
+                <td class="text-right font-mono text-sm
+                    {% if row.change_30d is not none and row.change_30d > 0.05 %}text-emerald-400{% elif row.change_30d is not none and row.change_30d < -0.05 %}text-red-400{% else %}text-gray-500{% endif %}">
+                    {% if row.change_30d is not none and row.change_30d != 0 %}{{ "%+.2f"|format(row.change_30d) }}{% else %}&mdash;{% endif %}
+                </td>
+                <td class="text-right font-mono text-sm
+                    {% if row.change_90d is not none and row.change_90d > 0.05 %}text-emerald-400{% elif row.change_90d is not none and row.change_90d < -0.05 %}text-red-400{% else %}text-gray-500{% endif %}">
+                    {% if row.change_90d is not none and row.change_90d != 0 %}{{ "%+.2f"|format(row.change_90d) }}{% else %}&mdash;{% endif %}
                 </td>
             </tr>
             {% endfor %}
