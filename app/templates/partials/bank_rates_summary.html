@@ -1,0 +1,38 @@
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Bankrenter eff. (Finansportalen)</h2>
+        <span class="text-xs text-gray-600">Est. LK = snitt topp 5 &minus; 0,15pp</span>
+    </div>
+    {% if bank_rows %}
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="text-gray-500 text-xs">
+                <th class="text-left pb-2">Tenor</th>
+                <th class="text-right pb-2">Rente</th>
+                <th class="text-right pb-2">7d</th>
+                <th class="text-right pb-2">14d</th>
+                <th class="text-right pb-2">30d</th>
+                <th class="text-right pb-2">60d</th>
+                <th class="text-right pb-2">90d</th>
+            </tr>
+        </thead>
+        <tbody class="text-gray-200">
+            {% for row in bank_rows %}
+            <tr class="border-t border-gray-800/50">
+                <td class="py-2">{{ row.tenor }}</td>
+                <td class="text-right font-mono font-medium">{{ "%.2f"|format(row.rate) }}%</td>
+                {% for field in ['change_7d', 'change_14d', 'change_30d', 'change_60d', 'change_90d'] %}
+                {% set val = row[field] %}
+                <td class="text-right font-mono text-sm
+                    {% if val is not none and val > 0.02 %}text-emerald-400{% elif val is not none and val < -0.02 %}text-red-400{% else %}text-gray-500{% endif %}">
+                    {% if val is not none and val != 0 %}{{ "%+.2f"|format(val) }}{% else %}&mdash;{% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-gray-500 text-sm">Mangler historisk bankdata</p>
+    {% endif %}
+</div>

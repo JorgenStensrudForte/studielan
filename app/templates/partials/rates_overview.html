@@ -1,0 +1,139 @@
+{% macro delta(val, threshold) -%}
+{% if val is not none and val != 0 -%}
+<span class="font-mono text-xs {% if val > threshold %}text-emerald-400{% elif val < -threshold %}text-red-400{% else %}text-gray-500{% endif %}">{{ "%+.2f"|format(val) }}</span>
+{%- else -%}
+<span class="font-mono text-xs text-gray-600">&mdash;</span>
+{%- endif %}
+{%- endmacro %}
+
+{# Build lookup maps for swap and bank by tenor key #}
+{% set swap_map = {} %}
+{% if swap_rows %}{% for row in swap_rows %}{% set _ = swap_map.update({row.tenor: row}) %}{% endfor %}{% endif %}
+{% set bank_map = {} %}
+{% if bank_rows %}{% for row in bank_rows %}{% set _ = bank_map.update({row.tenor: row}) %}{% endfor %}{% endif %}
+
+<div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+    <!-- Header -->
+    <div class="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Renteoversikt</h2>
+        <div class="flex items-center gap-4">
+            <span class="htmx-indicator text-xs text-brand-400">Oppdaterer...</span>
+            {% if lanekassen %}<span class="text-xs text-gray-600">{{ lanekassen.period }}</span>{% endif %}
+        </div>
+    </div>
+
+    <!-- Flytende rate -->
+    {% if lanekassen %}
+    <div class="px-5 py-2.5 border-b border-gray-800/60 flex items-center gap-3">
+        <span class="text-[10px] text-gray-500 uppercase tracking-wide font-semibold w-14">Flyt.</span>
+        <span class="font-mono text-base font-semibold text-white tracking-tight">{{ "%.3f"|format(lanekassen.floating) }}%</span>
+        <span class="text-[10px] text-gray-600">nominell</span>
+    </div>
+    {% endif %}
+
+    <!-- Unified table -->
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <!-- Source group headers -->
+                <tr class="text-[10px] text-gray-500 uppercase tracking-wider">
+                    <th class="text-left pl-5 py-2 w-14"></th>
+                    <th colspan="2" class="text-center py-2 border-l border-gray-700/60">
+                        <span class="text-gray-400 font-semibold">Lanekassen</span>
+                    </th>
+                    <th colspan="4" class="text-center py-2 border-l border-gray-700/60">
+                        <span class="text-gray-400 font-semibold">Swap</span>
+                        <span class="text-gray-600 font-normal ml-0.5">SEB</span>
+                    </th>
+                    <th colspan="3" class="text-center py-2 border-l border-gray-700/60">
+                        <span class="text-gray-400 font-semibold">Est. LK eff.</span>
+                        <span class="text-gray-600 font-normal ml-0.5">FP</span>
+                    </th>
+                </tr>
+                <!-- Sub-column headers -->
+                <tr class="text-[10px] text-gray-600 border-t border-gray-800/30">
+                    <th class="text-left pl-5 pb-1 pt-0.5"></th>
+                    <th class="text-right pb-1 pt-0.5 pr-2 border-l border-gray-700/60">Nom.</th>
+                    <th class="text-right pb-1 pt-0.5 pr-3">Spr.</th>
+                    <th class="text-right pb-1 pt-0.5 pr-2 border-l border-gray-700/60">Rate</th>
+                    <th class="text-right pb-1 pt-0.5 pr-2">1d</th>
+                    <th class="text-right pb-1 pt-0.5 pr-2">30d</th>
+                    <th class="text-right pb-1 pt-0.5 pr-3">90d</th>
+                    <th class="text-right pb-1 pt-0.5 pr-2 border-l border-gray-700/60">Rate</th>
+                    <th class="text-right pb-1 pt-0.5 pr-2">30d</th>
+                    <th class="text-right pb-1 pt-0.5 pr-5">90d</th>
+                </tr>
+            </thead>
+            <tbody class="text-gray-200">
+                {# Row: 3 år #}
+                {% set lk3 = lanekassen.fixed_3y if lanekassen else none %}
+                {% set sw3 = swap_map.get("3 Yr") %}
+                {% set bk3 = bank_map.get("3 år") %}
+                <tr class="border-t border-gray-800/40 hover:bg-gray-800/20 transition-colors">
+                    <td class="pl-5 py-2 text-xs font-semibold text-gray-400">3 år</td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">
+                        {% if lk3 is not none %}{{ "%.3f"|format(lk3) }}%{% else %}&mdash;{% endif %}
+                    </td>
+                    <td class="text-right py-2 pr-3 font-mono text-xs {% if lk3 is not none and lanekassen and lk3 < lanekassen.floating %}text-emerald-400{% elif lk3 is not none %}text-red-400{% else %}text-gray-600{% endif %}">
+                        {% if lk3 is not none and lanekassen %}{{ "%+.3f"|format(lk3 - lanekassen.floating) }}{% else %}&mdash;{% endif %}
+                    </td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">{% if sw3 %}{{ "%.2f"|format(sw3.rate) }}%{% else %}&mdash;{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if sw3 %}{{ delta(sw3.change_today, 0) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if sw3 %}{{ delta(sw3.change_30d, 0.05) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-3">{% if sw3 %}{{ delta(sw3.change_90d, 0.05) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">{% if bk3 %}{{ "%.2f"|format(bk3.rate) }}%{% else %}&mdash;{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if bk3 %}{{ delta(bk3.change_30d, 0.02) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-5">{% if bk3 %}{{ delta(bk3.change_90d, 0.02) }}{% endif %}</td>
+                </tr>
+
+                {# Row: 5 år #}
+                {% set lk5 = lanekassen.fixed_5y if lanekassen else none %}
+                {% set sw5 = swap_map.get("5 Yr") %}
+                {% set bk5 = bank_map.get("5 år") %}
+                <tr class="border-t border-gray-800/40 hover:bg-gray-800/20 transition-colors">
+                    <td class="pl-5 py-2 text-xs font-semibold text-gray-400">5 år</td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">
+                        {% if lk5 is not none %}{{ "%.3f"|format(lk5) }}%{% else %}&mdash;{% endif %}
+                    </td>
+                    <td class="text-right py-2 pr-3 font-mono text-xs {% if lk5 is not none and lanekassen and lk5 < lanekassen.floating %}text-emerald-400{% elif lk5 is not none %}text-red-400{% else %}text-gray-600{% endif %}">
+                        {% if lk5 is not none and lanekassen %}{{ "%+.3f"|format(lk5 - lanekassen.floating) }}{% else %}&mdash;{% endif %}
+                    </td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">{% if sw5 %}{{ "%.2f"|format(sw5.rate) }}%{% else %}&mdash;{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if sw5 %}{{ delta(sw5.change_today, 0) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if sw5 %}{{ delta(sw5.change_30d, 0.05) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-3">{% if sw5 %}{{ delta(sw5.change_90d, 0.05) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">{% if bk5 %}{{ "%.2f"|format(bk5.rate) }}%{% else %}&mdash;{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if bk5 %}{{ delta(bk5.change_30d, 0.02) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-5">{% if bk5 %}{{ delta(bk5.change_90d, 0.02) }}{% endif %}</td>
+                </tr>
+
+                {# Row: 10 år #}
+                {% set lk10 = lanekassen.fixed_10y if lanekassen else none %}
+                {% set sw10 = swap_map.get("10 Yr") %}
+                {% set bk10 = bank_map.get("10 år") %}
+                <tr class="border-t border-gray-800/40 hover:bg-gray-800/20 transition-colors">
+                    <td class="pl-5 py-2 text-xs font-semibold text-gray-400">10 år</td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">
+                        {% if lk10 is not none %}{{ "%.3f"|format(lk10) }}%{% else %}&mdash;{% endif %}
+                    </td>
+                    <td class="text-right py-2 pr-3 font-mono text-xs {% if lk10 is not none and lanekassen and lk10 < lanekassen.floating %}text-emerald-400{% elif lk10 is not none %}text-red-400{% else %}text-gray-600{% endif %}">
+                        {% if lk10 is not none and lanekassen %}{{ "%+.3f"|format(lk10 - lanekassen.floating) }}{% else %}&mdash;{% endif %}
+                    </td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">{% if sw10 %}{{ "%.2f"|format(sw10.rate) }}%{% else %}&mdash;{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if sw10 %}{{ delta(sw10.change_today, 0) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if sw10 %}{{ delta(sw10.change_30d, 0.05) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-3">{% if sw10 %}{{ delta(sw10.change_90d, 0.05) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-2 font-mono font-medium border-l border-gray-700/60">{% if bk10 %}{{ "%.2f"|format(bk10.rate) }}%{% else %}&mdash;{% endif %}</td>
+                    <td class="text-right py-2 pr-2">{% if bk10 %}{{ delta(bk10.change_30d, 0.02) }}{% endif %}</td>
+                    <td class="text-right py-2 pr-5">{% if bk10 %}{{ delta(bk10.change_90d, 0.02) }}{% endif %}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-5 py-2 border-t border-gray-800/40 flex items-center justify-between text-[10px] text-gray-600">
+        <span>Spread = fast &minus; flytende | Est. LK eff. = snitt topp 5 &minus; 0,15pp</span>
+        <span>Swap: SEB live | Bank: Finansportalen</span>
+    </div>
+</div>

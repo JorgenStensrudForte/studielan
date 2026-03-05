@@ -217,23 +217,13 @@
 </div>
 {% endif %}
 
-<!-- Main grid -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-    <!-- Lånekassen -->
-    <div id="lanekassen-panel"
-         hx-get="/partials/lanekassen"
-         hx-trigger="every 300s"
-         hx-swap="innerHTML">
-        {% include "partials/lanekassen.html" %}
-    </div>
-
-    <!-- Swap rates -->
-    <div id="swap-panel"
-         hx-get="/partials/swap"
-         hx-trigger="every 60s"
-         hx-swap="innerHTML">
-        {% include "partials/swap_rates.html" %}
-    </div>
+<!-- Rates overview (unified) -->
+<div id="rates-overview-panel"
+     class="mb-4"
+     hx-get="/partials/rates-overview"
+     hx-trigger="every 60s"
+     hx-swap="innerHTML">
+    {% include "partials/rates_overview.html" %}
 </div>
 
 <!-- Swap history chart (full width) -->
@@ -249,6 +239,19 @@
      hx-swap="innerHTML">
     {% include "partials/banker.html" %}
 </div>
+
+<!-- Bootstrap bank history -->
+{% if not has_bank_history %}
+<div class="mb-4 bg-amber-900/30 border border-amber-700/50 rounded-xl p-4 text-sm text-amber-300">
+    <strong>Mangler bankrente-historikk.</strong> Grafen krever historiske data.
+    <button class="ml-2 underline hover:text-amber-100"
+            hx-post="/api/bootstrap-banks"
+            hx-swap="outerHTML"
+            hx-target="closest div">
+        Last ned historikk fra Finansportalen
+    </button>
+</div>
+{% endif %}
 
 <!-- Savings -->
 <div id="besparelse-panel" class="mb-4">

@@ -15,6 +15,7 @@ from app.config import (
 from app.models import LanekassenRate, Savings, Signal, TenorSignal, EstimatedRate
 from app import db
 from app.services import seb, lanekassen, finansportalen, cbonds
+from app.services import finansportalen_history
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -192,6 +193,63 @@ def _swap_change_for_days(
     if anchor is None:
         return None
     return round(current_rate - anchor, 3)
+
+
+def _bank_anchor_rate(history: list[dict], days: int, now_dt: datetime) -> float | None:
+    """Pick anchor effective rate ~N days ago from bank rate history."""
+    if len(history) < 2:
+        return None
+    target = now_dt - timedelta(days=days)
+    parsed = []
+    for pt in history:
+        d = pt.get("observed_date")
+        r = pt.get("estimated_lk_effective")
+        if d is None or r is None:
+            continue
+        try:
+            parsed.append((datetime.fromisoformat(d), float(r)))
+        except (TypeError, ValueError):
+            continue
+    if len(parsed) < 2:
+        return None
+    before = [rate for obs, rate in parsed if obs <= target]
+    if before:
+        return before[-1]
+    oldest_obs, oldest_rate = parsed[0]
+    if oldest_obs <= target + timedelta(days=2):
+        return oldest_rate
+    return None
+
+
+def _build_bank_rows(estimates: list, bank_rate_history: dict[str, list[dict]]) -> list[dict]:
+    """Build summary rows for bank rate estimates with period changes (like swap_rows)."""
+    now_dt = datetime.now()
+    tenor_map = {"3 år": 3, "5 år": 5, "10 år": 10}
+    rows = []
+    for est in estimates:
+        tenor = est.tenor
+        history = bank_rate_history.get(tenor, [])
+        current_eff = est.avg_top5 + 0.15 - 0.15  # avg_top5 is nominal, we need effective
+        # Get current effective from history (latest point) or compute from estimates
+        if history:
+            current_eff = history[-1].get("estimated_lk_effective", 0)
+        rows.append({
+            "tenor": tenor,
+            "rate": round(current_eff, 3),
+            "change_7d": _bank_change(history, current_eff, 7, now_dt),
+            "change_14d": _bank_change(history, current_eff, 14, now_dt),
+            "change_30d": _bank_change(history, current_eff, 30, now_dt),
+            "change_60d": _bank_change(history, current_eff, 60, now_dt),
+            "change_90d": _bank_change(history, current_eff, 90, now_dt),
+        })
+    return rows
+
+
+def _bank_change(history, current, days, now_dt):
+    anchor = _bank_anchor_rate(history, days, now_dt)
+    if anchor is None:
+        return None
+    return round(current - anchor, 3)
 
 
 def _build_swap_rows(swap_rates: list, swap_history: dict[str, list[dict]]) -> list[dict]:
@@ -575,6 +633,17 @@ async def _fetch_all_data(
         except Exception as e:
             logger.error(f"Bank history storage failed: {e}")
 
+    # Bank rate history (effective) for charting
+    bank_rate_history = {}
+    has_bank_history = False
+    for tenor in ["3 år", "5 år", "10 år"]:
+        bank_rate_history[tenor] = await db.get_bank_rate_history(tenor, days=500)
+        if len(bank_rate_history[tenor]) >= 2:
+            has_bank_history = True
+
+    # Bank rate summary rows (like swap_rows but for Finansportalen effective rates)
+    bank_rows = _build_bank_rows(estimates, bank_rate_history)
+
     # Savings
     savings = _compute_savings(lk_current, loan_amount, estimates) if lk_current else []
 
@@ -616,6 +685,9 @@ async def _fetch_all_data(
         "has_swap_history": has_swap_history,
         "products_by_tenor": products_by_tenor,
         "banker_updated_at": banker_updated_at,
+        "bank_rate_history": bank_rate_history,
+        "has_bank_history": has_bank_history,
+        "bank_rows": bank_rows,
         "estimates": estimates,
         "savings": savings,
         "signal": signal,
@@ -731,6 +803,45 @@ async def api_bank_products_history(bound_years: int = 3, days: int = 365):
 
 
 # --- HTMX Partials ---
+
+@app.get("/partials/rates-overview", response_class=HTMLResponse)
+async def partial_rates_overview(request: Request):
+    """Combined rates overview: LK + Swap + Bank estimates."""
+    try:
+        lk_rates = await lanekassen.fetch_rates()
+        lk = lk_rates[0] if lk_rates else None
+    except Exception:
+        lk = None
+
+    try:
+        swap_rates_data = await seb.fetch_swap_rates()
+        await db.insert_swap_rates(swap_rates_data)
+    except Exception:
+        swap_rates_data = []
+
+    swap_history = {}
+    for tenor in ["3 Yr", "5 Yr", "10 Yr"]:
+        swap_history[tenor] = await db.get_swap_history(tenor, days=90)
+    swap_rows = _build_swap_rows(swap_rates_data, swap_history)
+
+    bank_rate_history = {}
+    for tenor in ["3 år", "5 år", "10 år"]:
+        bank_rate_history[tenor] = await db.get_bank_rate_history(tenor, days=500)
+
+    try:
+        products_by_tenor = await finansportalen.fetch_products_by_tenor(top_n=5)
+    except Exception:
+        products_by_tenor = {}
+    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
+    bank_rows = _build_bank_rows(estimates, bank_rate_history)
+
+    return templates.TemplateResponse("partials/rates_overview.html", {
+        "request": request,
+        "lanekassen": lk,
+        "swap_rows": swap_rows,
+        "bank_rows": bank_rows,
+    })
+
 
 @app.get("/partials/lanekassen", response_class=HTMLResponse)
 async def partial_lanekassen(request: Request):
@@ -882,4 +993,31 @@ async def bootstrap():
         return {"status": "ok", "rates_stored": len(rates)}
     except Exception as e:
         logger.error(f"Bootstrap failed: {e}")
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
+
+
+@app.post("/api/bootstrap-banks")
+async def bootstrap_banks():
+    """Backfill historical bank fastrente data from Finansportalen (Dec 2024+)."""
+    try:
+        raw = await finansportalen_history.fetch_historical_products()
+        timeline = finansportalen_history._build_timeline(raw, since="2024-12-01")
+        results = finansportalen_history.compute_historical_estimates(timeline, top_n=5)
+
+        products_stored = 0
+        estimates_stored = 0
+        for date_str, products_by_tenor, estimates in results:
+            await db.insert_bank_products(products_by_tenor, observed_date=date_str)
+            products_stored += sum(len(prods) for prods in products_by_tenor.values())
+            await db.insert_bank_rate_estimates(estimates, products_by_tenor, observed_date=date_str)
+            estimates_stored += len(estimates)
+
+        return {
+            "status": "ok",
+            "dates": len(results),
+            "products_stored": products_stored,
+            "estimates_stored": estimates_stored,
+        }
+    except Exception as e:
+        logger.error(f"Bank bootstrap failed: {e}")
         return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)

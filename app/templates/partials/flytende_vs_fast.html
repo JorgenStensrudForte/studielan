@@ -1,0 +1,46 @@
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <div class="flex items-center justify-between mb-1">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Flytende vs fast nå</h2>
+        <span class="text-xs text-gray-500">
+            ved {{ "{:,.0f}".format(loan_amount).replace(",", " ") }} kr
+        </span>
+    </div>
+    <p class="text-xs text-gray-600 mb-4">
+        Estimert kostnad hvis du går fra dagens flytende rente til fast 3/5/10 år.
+    </p>
+
+    {% if lanekassen and floating_vs_fixed %}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {% for row in floating_vs_fixed %}
+        {% set is_loss = row.diff_pp > 0 %}
+        {% set is_gain = row.diff_pp < 0 %}
+        {% set two_month = (row.annual_diff * 2 / 12) | round(0) | int %}
+        <div class="bg-gray-800/50 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Fast {{ row.tenor }} år</p>
+            <p class="text-lg font-mono font-semibold
+                {% if is_loss %}text-red-400{% elif is_gain %}text-emerald-400{% else %}text-gray-300{% endif %}">
+                {% if is_loss %}Tap{% elif is_gain %}Gevinst{% else %}Lik kostnad{% endif %}
+            </p>
+            <p class="text-xs mt-1
+                {% if is_loss %}text-red-300{% elif is_gain %}text-emerald-300{% else %}text-gray-400{% endif %}">
+                {{ "{:+,.0f}".format(row.annual_diff).replace(",", " ") }} kr/år
+            </p>
+            <p class="text-xs mt-0.5 font-medium
+                {% if is_loss %}text-red-200{% elif is_gain %}text-emerald-200{% else %}text-gray-300{% endif %}">
+                {{ "{:+,.0f}".format(row.total_diff).replace(",", " ") }} kr over {{ row.years }} år
+            </p>
+            <p class="text-[11px] text-gray-500 mt-0.5">
+                ca. {{ "{:+,.0f}".format(two_month).replace(",", " ") }} kr over 2 mnd
+            </p>
+            <p class="text-xs text-gray-600 mt-1">
+                {{ "%.3f"|format(row.floating_rate) }}% flytende →
+                {{ "%.3f"|format(row.fixed_rate) }}% fast
+                ({{ "%+.3f"|format(row.diff_pp) }}pp)
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-500 text-sm">Kunne ikke beregne flytende vs fast akkurat nå.</p>
+    {% endif %}
+</div>

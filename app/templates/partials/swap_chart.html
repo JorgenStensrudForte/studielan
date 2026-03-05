@@ -1,63 +1,238 @@
-{% set lens = swap_history.values() | map('length') | list %}
-{% set has_history = lens | max > 1 if lens else false %}
-{% if has_history %}
-<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
-    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Swap-renter siste 90 dager</h2>
-    <canvas id="swap-history-chart"></canvas>
+{% set swap_lens = swap_history.values() | map('length') | list %}
+{% set has_swap = swap_lens | max > 1 if swap_lens else false %}
+{% set bank_lens = bank_rate_history.values() | map('length') | list if bank_rate_history is defined else [] %}
+{% set has_bank = bank_lens | max > 1 if bank_lens else false %}
+
+{% if has_swap or has_bank %}
+<div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+    <!-- Tab bar -->
+    <div class="flex items-center justify-between border-b border-gray-800 px-5 pt-4 pb-0">
+        <div id="chart-tabs" class="flex gap-1">
+            {% if has_swap %}
+            <button data-chart-tab="swap" class="px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 border-gray-700 bg-gray-800 text-white -mb-px relative z-10 transition-colors">
+                Swap-renter
+            </button>
+            {% endif %}
+            {% if has_bank %}
+            <button data-chart-tab="bank" class="px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 border-gray-800 bg-gray-900 text-gray-500 -mb-px relative z-0 transition-colors hover:text-gray-300">
+                Bankrenter eff.
+            </button>
+            {% endif %}
+            {% if has_swap and has_bank %}
+            <button data-chart-tab="combined" class="px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 border-gray-800 bg-gray-900 text-gray-500 -mb-px relative z-0 transition-colors hover:text-gray-300">
+                Samlet
+            </button>
+            {% endif %}
+        </div>
+        <span id="chart-subtitle" class="text-xs text-gray-600 pb-1.5"></span>
+    </div>
+
+    <!-- Chart canvases -->
+    <div class="p-5">
+        {% if has_swap %}
+        <div id="chart-panel-swap">
+            <canvas id="swap-history-chart"></canvas>
+        </div>
+        {% endif %}
+        {% if has_bank %}
+        <div id="chart-panel-bank" class="hidden">
+            <canvas id="bank-rate-chart"></canvas>
+        </div>
+        {% endif %}
+        {% if has_swap and has_bank %}
+        <div id="chart-panel-combined" class="hidden">
+            <canvas id="combined-chart"></canvas>
+        </div>
+        {% endif %}
+    </div>
 </div>
+
 <script>
 (function() {
     Chart.defaults.color = '#9ca3af';
     Chart.defaults.borderColor = '#374151';
 
-    const history = {{ swap_history | tojson }};
-    const styles = {
-        '3 Yr': { color: '#34d399', dash: [],      width: 2.5 },
-        '5 Yr': { color: '#60a5fa', dash: [6, 3],  width: 2.5 },
-        '10 Yr':{ color: '#a78bfa', dash: [2, 2],  width: 2.5 },
+    const chartInstances = {};
+
+    /* ── Color palette ── */
+    const COLORS = {
+        green:  '#34d399',
+        blue:   '#60a5fa',
+        purple: '#a78bfa',
+        pink:   '#f472b6',
+        orange: '#fb923c',
+        yellow: '#facc15',
     };
 
-    let allDates = [];
-    const dataByTenor = {};
-    for (const [tenor, points] of Object.entries(history)) {
-        if (points.length < 2) continue;
-        const mapped = points.map(p => {
-            const d = p.observed_at.split('T')[0];
-            const parts = d.split('-');
-            return { date: d, label: parts[2] + '.' + parts[1], rate: p.rate };
-        });
-        dataByTenor[tenor] = mapped;
-        if (mapped.length > allDates.length) {
-            allDates = mapped.map(m => m.label);
+    /* ── Swap data ── */
+    const swapHistory = {{ swap_history | tojson }};
+    const swapStyles = {
+        '3 Yr':  { color: COLORS.green,  dash: [],     width: 2 },
+        '5 Yr':  { color: COLORS.blue,   dash: [6, 3], width: 2 },
+        '10 Yr': { color: COLORS.purple, dash: [2, 2], width: 2 },
+    };
+
+    function buildSwapDatasets(opts) {
+        const o = opts || {};
+        const datasets = [];
+        for (const [tenor, points] of Object.entries(swapHistory)) {
+            if (points.length < 2) continue;
+            const s = swapStyles[tenor] || { color: '#9ca3af', dash: [], width: 2 };
+            datasets.push({
+                label: o.prefix ? o.prefix + tenor : tenor,
+                data: points.map(p => ({ x: p.observed_at.split('T')[0], y: p.rate })),
+                borderColor: o.color || s.color,
+                backgroundColor: 'transparent',
+                borderWidth: o.width || s.width,
+                borderDash: o.dash !== undefined ? o.dash : s.dash,
+                pointRadius: 0,
+                pointHitRadius: 8,
+                tension: 0.3,
+                ...(o.extra || {}),
+            });
         }
+        return datasets;
     }
 
-    const datasets = [];
-    for (const [tenor, mapped] of Object.entries(dataByTenor)) {
-        const s = styles[tenor] || { color: '#9ca3af', dash: [], width: 2 };
-        datasets.push({
-            label: tenor,
-            data: mapped.map(m => m.rate),
-            borderColor: s.color,
-            backgroundColor: 'transparent',
-            borderWidth: s.width,
-            borderDash: s.dash,
-            pointRadius: 0,
-            pointHitRadius: 8,
-            tension: 0.3,
+    /* ── Bank data ── */
+    {% if has_bank %}
+    const bankHistory = {{ bank_rate_history | tojson }};
+    {% else %}
+    const bankHistory = {};
+    {% endif %}
+    const bankStyles = {
+        '3 år':  { color: COLORS.pink,   dash: [],     width: 2 },
+        '5 år':  { color: COLORS.orange, dash: [6, 3], width: 2 },
+        '10 år': { color: COLORS.yellow, dash: [2, 2], width: 2 },
+    };
+
+    function buildBankDatasets(opts) {
+        const o = opts || {};
+        const datasets = [];
+        for (const [tenor, points] of Object.entries(bankHistory)) {
+            if (points.length < 2) continue;
+            const s = bankStyles[tenor] || { color: '#9ca3af', dash: [], width: 2 };
+            datasets.push({
+                label: o.prefix ? o.prefix + tenor : 'Est. LK ' + tenor,
+                data: points.map(p => ({ x: p.observed_date, y: p.estimated_lk_effective })),
+                borderColor: o.color || s.color,
+                backgroundColor: 'transparent',
+                borderWidth: o.width || s.width,
+                borderDash: o.dash !== undefined ? o.dash : s.dash,
+                pointRadius: 0,
+                pointHitRadius: 8,
+                tension: 0.3,
+                ...(o.extra || {}),
+            });
+        }
+        return datasets;
+    }
+
+    /* ── Helpers ── */
+    function getEarliestDate(datasets) {
+        let earliest = null;
+        for (const ds of datasets) {
+            if (ds.data.length) {
+                const d = ds.data[0].x;
+                if (!earliest || d < earliest) earliest = d;
+            }
+        }
+        return earliest;
+    }
+
+    const tooltipCallbacks = {
+        title: items => {
+            if (!items.length) return '';
+            const d = items[0].raw.x;
+            const parts = d.split('-');
+            return parts[2] + '.' + parts[1] + '.' + parts[0];
+        },
+        label: ctx => ctx.dataset.label + ': ' + ctx.raw.y.toFixed(3) + '%',
+    };
+
+    /* ── Standard chart (single y-axis) ── */
+    function makeOptions(aspectRatio, xMin) {
+        const opts = {
+            responsive: true,
+            aspectRatio: aspectRatio || 3,
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            plugins: {
+                legend: { labels: { usePointStyle: true, pointStyle: 'line', boxWidth: 20, font: { size: 11 } } },
+                tooltip: { callbacks: tooltipCallbacks },
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'week', displayFormats: { day: 'dd.MM', week: 'dd.MM', month: 'MMM yy' } },
+                    grid: { display: false },
+                    ticks: { maxTicksLimit: 14, font: { size: 10 }, maxRotation: 45, minRotation: 0 },
+                },
+                y: {
+                    grid: { color: '#1f2937' },
+                    ticks: { callback: v => v.toFixed(2) + '%', font: { size: 10 } },
+                },
+            },
+        };
+        if (xMin) opts.scales.x.min = xMin;
+        return opts;
+    }
+
+    function createChart(canvasId, datasets, aspectRatio, xMin) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx || !datasets.length) return null;
+        if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+        const c = new Chart(ctx, { type: 'line', data: { datasets }, options: makeOptions(aspectRatio, xMin) });
+        chartInstances[canvasId] = c;
+        return c;
+    }
+
+    /* ── Dual y-axis chart for combined view ──
+     *  Swap = left axis, faded thin lines (background layer)
+     *  Bank = right axis, bold thick lines (foreground layer)
+     */
+    function createDualChart(canvasId, xMin) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return null;
+        if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+        /* Swap: muted, thin, no dashes — clean background */
+        const swapDs = buildSwapDatasets({
+            prefix: 'Swap ',
+            width: 1.5,
+            dash: [],
+            extra: { yAxisID: 'ySwap', borderColor: undefined },
         });
-    }
+        /* Override individual colors but add transparency */
+        const swapAlpha = {
+            '3 Yr': COLORS.green + '99',
+            '5 Yr': COLORS.blue + '99',
+            '10 Yr': COLORS.purple + '99',
+        };
+        for (const ds of swapDs) {
+            const tenor = ds.label.replace('Swap ', '');
+            ds.borderColor = swapAlpha[tenor] || '#9ca3af99';
+            ds.borderWidth = 1.5;
+            ds.borderDash = [];
+        }
 
-    const ctx = document.getElementById('swap-history-chart');
-    if (ctx && datasets.length) {
-        if (ctx._chartInstance) ctx._chartInstance.destroy();
-        const chart = new Chart(ctx, {
+        /* Bank: bold, thick, solid — primary focus */
+        const bankDs = buildBankDatasets({
+            width: 3,
+            dash: [],
+            extra: { yAxisID: 'yBank' },
+        });
+
+        const datasets = [...swapDs, ...bankDs];
+        if (!datasets.length) return null;
+
+        const tickFmt = v => v.toFixed(2) + '%';
+        const c = new Chart(ctx, {
             type: 'line',
-            data: { labels: allDates, datasets },
+            data: { datasets },
             options: {
                 responsive: true,
-                aspectRatio: 3,
-                interaction: { mode: 'index', intersect: false },
+                aspectRatio: 2.5,
+                interaction: { mode: 'nearest', axis: 'x', intersect: false },
                 plugins: {
                     legend: {
                         labels: {
@@ -65,36 +240,100 @@
                             pointStyle: 'line',
                             boxWidth: 20,
                             font: { size: 11 },
+                            /* Dim swap legend items to match line opacity */
+                            generateLabels: chart => {
+                                const orig = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                return orig.map(l => {
+                                    if (l.text.startsWith('Swap')) {
+                                        l.fontColor = '#9ca3af80';
+                                    }
+                                    return l;
+                                });
+                            },
                         },
                     },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(2) + '%',
-                        }
-                    }
+                    tooltip: { callbacks: tooltipCallbacks },
                 },
                 scales: {
                     x: {
+                        type: 'time',
+                        time: { unit: 'week', displayFormats: { day: 'dd.MM', week: 'dd.MM', month: 'MMM yy' } },
                         grid: { display: false },
-                        ticks: {
-                            maxTicksLimit: 12,
-                            font: { size: 10 },
-                            maxRotation: 45,
-                            minRotation: 0,
-                        },
+                        ticks: { maxTicksLimit: 14, font: { size: 10 }, maxRotation: 45, minRotation: 0 },
+                        min: xMin || undefined,
                     },
-                    y: {
-                        grid: { color: '#1f2937' },
-                        ticks: {
-                            callback: v => v.toFixed(2) + '%',
-                            font: { size: 10 },
-                        },
+                    ySwap: {
+                        type: 'linear',
+                        position: 'left',
+                        title: { display: true, text: 'Swap', color: COLORS.green + '99', font: { size: 10, weight: 'normal' } },
+                        grid: { color: '#1f293740' },
+                        ticks: { callback: tickFmt, font: { size: 10 }, color: '#9ca3af80' },
+                    },
+                    yBank: {
+                        type: 'linear',
+                        position: 'right',
+                        title: { display: true, text: 'Est. LK eff.', color: COLORS.pink, font: { size: 10, weight: 'bold' } },
+                        grid: { drawOnChartArea: false },
+                        ticks: { callback: tickFmt, font: { size: 10 }, color: COLORS.pink },
                     },
                 },
             },
         });
-        ctx._chartInstance = chart;
+        chartInstances[canvasId] = c;
+        return c;
     }
+
+    /* ── Render initial swap chart ── */
+    {% if has_swap %}
+    createChart('swap-history-chart', buildSwapDatasets(), undefined, '2026-02-01');
+    {% endif %}
+
+    /* ── Tab switching ── */
+    const subtitles = {
+        swap: 'Siste 90 dager',
+        bank: 'Topp 5 banksnitt \u2212 0,15pp (effektiv)',
+        combined: 'Swap + Est. LK effektiv (dual akse)',
+    };
+
+    const tabs = document.querySelectorAll('#chart-tabs [data-chart-tab]');
+    const panels = {
+        swap: document.getElementById('chart-panel-swap'),
+        bank: document.getElementById('chart-panel-bank'),
+        combined: document.getElementById('chart-panel-combined'),
+    };
+    const subtitleEl = document.getElementById('chart-subtitle');
+
+    function activateTab(key) {
+        tabs.forEach(t => {
+            const active = t.dataset.chartTab === key;
+            t.classList.toggle('bg-gray-800', active);
+            t.classList.toggle('text-white', active);
+            t.classList.toggle('border-gray-700', active);
+            t.classList.toggle('z-10', active);
+            t.classList.toggle('bg-gray-900', !active);
+            t.classList.toggle('text-gray-500', !active);
+            t.classList.toggle('border-gray-800', !active);
+            t.classList.toggle('z-0', !active);
+        });
+        for (const [k, panel] of Object.entries(panels)) {
+            if (panel) panel.classList.toggle('hidden', k !== key);
+        }
+        subtitleEl.textContent = subtitles[key] || '';
+
+        if (key === 'bank' && !chartInstances['bank-rate-chart']) {
+            const swapDs = buildSwapDatasets();
+            const xMin = getEarliestDate(swapDs);
+            createChart('bank-rate-chart', buildBankDatasets(), undefined, xMin);
+        }
+        if (key === 'combined' && !chartInstances['combined-chart']) {
+            const swapDs = buildSwapDatasets();
+            const xMin = getEarliestDate(swapDs) || getEarliestDate(buildBankDatasets());
+            createDualChart('combined-chart', xMin);
+        }
+    }
+
+    tabs.forEach(t => t.addEventListener('click', () => activateTab(t.dataset.chartTab)));
+    subtitleEl.textContent = subtitles[tabs[0] ? tabs[0].dataset.chartTab : 'swap'] || '';
 })();
 </script>
 {% endif %}
