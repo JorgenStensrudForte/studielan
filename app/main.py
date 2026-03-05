@@ -514,6 +514,14 @@ async def _fetch_all_data(
     # Estimated next Lånekassen rates
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_current)
 
+    # Store bank history (products + estimates)
+    if products_by_tenor:
+        try:
+            await db.insert_bank_products(products_by_tenor)
+            await db.insert_bank_rate_estimates(estimates, products_by_tenor)
+        except Exception as e:
+            logger.error(f"Bank history storage failed: {e}")
+
     # Savings
     savings = _compute_savings(lk_current, loan_amount, estimates) if lk_current else []
 
@@ -652,6 +660,20 @@ async def api_dashboard(
 @app.get("/api/swap-history")
 async def api_swap_history(tenor: str = "3 Yr", days: int = 90):
     history = await db.get_swap_history(tenor, days)
+    return JSONResponse(history)
+
+
+@app.get("/api/bank-history")
+async def api_bank_history(tenor: str | None = None, days: int = 365):
+    """Historical bank rate estimates (avg top 5 ± 0.15pp) for charting."""
+    history = await db.get_bank_rate_history(tenor, days)
+    return JSONResponse(history)
+
+
+@app.get("/api/bank-products-history")
+async def api_bank_products_history(bound_years: int = 3, days: int = 365):
+    """Historical individual bank products for a given tenor."""
+    history = await db.get_bank_products_history(bound_years, days)
     return JSONResponse(history)
 
 
