@@ -72,6 +72,16 @@
         '10 Yr': { color: COLORS.purple, dash: [2, 2], width: 2 },
     };
 
+    /* Deduplicate points: keep last value per date */
+    function dedup(points, xKey, yKey) {
+        const map = new Map();
+        for (const p of points) {
+            const d = (p[xKey] || '').split('T')[0];
+            map.set(d, p[yKey]);
+        }
+        return Array.from(map, ([x, y]) => ({ x, y }));
+    }
+
     function buildSwapDatasets(opts) {
         const o = opts || {};
         const datasets = [];
@@ -80,7 +90,7 @@
             const s = swapStyles[tenor] || { color: '#9ca3af', dash: [], width: 2 };
             datasets.push({
                 label: o.prefix ? o.prefix + tenor : tenor,
-                data: points.map(p => ({ x: p.observed_at.split('T')[0], y: p.rate })),
+                data: dedup(points, 'observed_at', 'rate'),
                 borderColor: o.color || s.color,
                 backgroundColor: 'transparent',
                 borderWidth: o.width || s.width,
@@ -114,7 +124,7 @@
             const s = bankStyles[tenor] || { color: '#9ca3af', dash: [], width: 2 };
             datasets.push({
                 label: o.prefix ? o.prefix + tenor : 'Est. LK ' + tenor,
-                data: points.map(p => ({ x: p.observed_date, y: p.estimated_lk_effective })),
+                data: dedup(points, 'observed_date', 'estimated_lk_effective'),
                 borderColor: o.color || s.color,
                 backgroundColor: 'transparent',
                 borderWidth: o.width || s.width,
