@@ -985,6 +985,28 @@ async def collect():
         return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
 
 
+@app.post("/api/seed-swap")
+async def seed_swap(request: Request):
+    """Seed swap rates from JSON payload. Expects: [{"tenor":"3 Yr","rate":4.44,"observed_at":"2026-03-03T00:00:00","source":"cbonds"}]"""
+    from app.models import SwapRate
+    try:
+        data = await request.json()
+        rates = [
+            SwapRate(
+                tenor=r["tenor"], rate=r["rate"],
+                change_today=r.get("change_today", 0),
+                observed_at=datetime.fromisoformat(r["observed_at"]),
+                source=r.get("source", "manual"),
+            )
+            for r in data
+        ]
+        await db.insert_swap_rates(rates)
+        return {"status": "ok", "rates_stored": len(rates)}
+    except Exception as e:
+        logger.error(f"Seed swap failed: {e}")
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
+
+
 @app.post("/api/bootstrap")
 async def bootstrap():
     try:
