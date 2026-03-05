@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
@@ -22,11 +23,63 @@ _BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
 
 
+async def collect_daily_snapshot():
+    """Fetch and store swap rates + bank data. Called by scheduler and /api/collect."""
+    results = {"swap": 0, "banks": 0, "estimates": 0, "errors": []}
+
+    # Swap rates
+    try:
+        swap_rates = await seb.fetch_swap_rates()
+        await db.insert_swap_rates(swap_rates)
+        results["swap"] = len(swap_rates)
+    except Exception as e:
+        results["errors"].append(f"SEB: {e}")
+
+    # Bank products + estimates
+    try:
+        products_by_tenor = await finansportalen.fetch_products_by_tenor(top_n=5)
+        await db.insert_bank_products(products_by_tenor)
+        results["banks"] = sum(len(v) for v in products_by_tenor.values())
+
+        try:
+            lk_rates = await lanekassen.fetch_rates()
+            lk = lk_rates[0] if lk_rates else None
+        except Exception:
+            lk = None
+
+        estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
+        await db.insert_bank_rate_estimates(estimates, products_by_tenor)
+        results["estimates"] = len(estimates)
+    except Exception as e:
+        results["errors"].append(f"Finansportalen: {e}")
+
+    return results
+
+
+async def _daily_scheduler():
+    """Run collect_daily_snapshot once per day at ~07:00 UTC."""
+    while True:
+        now = datetime.now()
+        tomorrow_7am = (now + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
+        wait_seconds = (tomorrow_7am - now).total_seconds()
+        logger.info(f"Daily collector: next run in {wait_seconds/3600:.1f}h at {tomorrow_7am.isoformat()}")
+        await asyncio.sleep(wait_seconds)
+
+        logger.info("Daily collector: starting snapshot")
+        try:
+            results = await collect_daily_snapshot()
+            logger.info(f"Daily collector: done — {results}")
+        except Exception as e:
+            logger.error(f"Daily collector failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.init_db()
     logger.info("Database initialized")
+    task = asyncio.create_task(_daily_scheduler())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="Studielån Rentekalkulator", lifespan=lifespan)
@@ -514,6 +567,14 @@ async def _fetch_all_data(
     # Estimated next Lånekassen rates
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_current)
 
+    # Store bank history (products + estimates)
+    if products_by_tenor:
+        try:
+            await db.insert_bank_products(products_by_tenor)
+            await db.insert_bank_rate_estimates(estimates, products_by_tenor)
+        except Exception as e:
+            logger.error(f"Bank history storage failed: {e}")
+
     # Savings
     savings = _compute_savings(lk_current, loan_amount, estimates) if lk_current else []
 
@@ -655,6 +716,20 @@ async def api_swap_history(tenor: str = "3 Yr", days: int = 90):
     return JSONResponse(history)
 
 
+@app.get("/api/bank-history")
+async def api_bank_history(tenor: str | None = None, days: int = 365):
+    """Historical bank rate estimates (avg top 5 ± 0.15pp) for charting."""
+    history = await db.get_bank_rate_history(tenor, days)
+    return JSONResponse(history)
+
+
+@app.get("/api/bank-products-history")
+async def api_bank_products_history(bound_years: int = 3, days: int = 365):
+    """Historical individual bank products for a given tenor."""
+    history = await db.get_bank_products_history(bound_years, days)
+    return JSONResponse(history)
+
+
 # --- HTMX Partials ---
 
 @app.get("/partials/lanekassen", response_class=HTMLResponse)
@@ -785,6 +860,16 @@ async def oppdater():
         rates = await seb.fetch_swap_rates()
         await db.insert_swap_rates(rates)
         return {"status": "ok", "rates_stored": len(rates)}
+    except Exception as e:
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
+
+
+@app.post("/api/collect")
+async def collect():
+    """Manual trigger: collect and store all data (swap + banks + estimates)."""
+    try:
+        results = await collect_daily_snapshot()
+        return {"status": "ok", **results}
     except Exception as e:
         return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
 
