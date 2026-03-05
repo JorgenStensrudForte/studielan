@@ -166,7 +166,7 @@ async def insert_bank_products(
     db = await get_db()
     try:
         await db.executemany(
-            """INSERT OR IGNORE INTO bank_products
+            """INSERT OR REPLACE INTO bank_products
                (bank, product_name, nominal_rate, effective_rate, bound_years, rank, observed_date)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             rows,
@@ -218,7 +218,7 @@ async def insert_bank_rate_estimates(
     db = await get_db()
     try:
         await db.executemany(
-            """INSERT OR IGNORE INTO bank_rate_estimates
+            """INSERT OR REPLACE INTO bank_rate_estimates
                (tenor, bound_years, avg_top5_nominal, avg_top5_effective,
                 estimated_lk_nominal, estimated_lk_effective,
                 bank_count, std_dev_nominal, std_dev_effective,

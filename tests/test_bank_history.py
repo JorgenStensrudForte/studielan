@@ -64,12 +64,20 @@ async def test_insert_and_query_bank_estimates(test_db):
 
 
 @pytest.mark.asyncio
-async def test_duplicate_insert_ignored(test_db):
+async def test_duplicate_insert_replaces(test_db):
     await db.insert_bank_products(SAMPLE_PRODUCTS, observed_date="2026-03-05")
-    await db.insert_bank_products(SAMPLE_PRODUCTS, observed_date="2026-03-05")
+
+    # Update a rate and re-insert same day
+    updated = {3: [
+        BankProduct(bank="Sbanken", nominal_rate=4.95, effective_rate=5.05, period="3 år", bound_years=3, product_name="Boliglån fast 3 år"),
+        BankProduct(bank="SpareBank 1 Østfold", nominal_rate=4.93, effective_rate=5.09, period="3 år", bound_years=3, product_name="Boliglån fast"),
+        BankProduct(bank="Sparebanken Møre", nominal_rate=4.99, effective_rate=5.16, period="3 år", bound_years=3, product_name="Boliglån fast"),
+    ]}
+    await db.insert_bank_products(updated, observed_date="2026-03-05")
 
     history = await db.get_bank_products_history(bound_years=3, days=365)
     assert len(history) == 3  # no duplicates
+    assert history[0]["nominal_rate"] == 4.95  # updated value kept
 
 
 @pytest.mark.asyncio
