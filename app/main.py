@@ -387,13 +387,10 @@ def _tenor_signal(
         f"datapåslag ({quality_penalty:.2f}) − tenorpåslag ({tenor_penalty:.2f})"
     )
 
+    # Quality/trend issues are already accounted for via quality_penalty
+    # and missing trend_score contribution in the score itself.
+    # Only use a fixed decision margin to avoid double-counting.
     decision_margin = 1.0
-    if not has_trend:
-        decision_margin += 0.2
-    if bank_count and bank_count < 5:
-        decision_margin += 0.2
-    if std_dev > 0.15:
-        decision_margin += 0.2
 
     def _make(rec, color):
         return TenorSignal(
