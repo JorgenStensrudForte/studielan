@@ -387,13 +387,10 @@ def _tenor_signal(
         f"datapåslag ({quality_penalty:.2f}) − tenorpåslag ({tenor_penalty:.2f})"
     )
 
+    # Quality/trend issues are already accounted for via quality_penalty
+    # and missing trend_score contribution in the score itself.
+    # Only use a fixed decision margin to avoid double-counting.
     decision_margin = 1.0
-    if not has_trend:
-        decision_margin += 0.2
-    if bank_count and bank_count < 5:
-        decision_margin += 0.2
-    if std_dev > 0.15:
-        decision_margin += 0.2
 
     def _make(rec, color):
         return TenorSignal(
@@ -614,6 +611,14 @@ async def _fetch_all_data(
 
     lk_current = lk_rates[0] if lk_rates else None
 
+    # Find the most recent period that has at least one fixed rate.
+    # The newest period may not have fixed rates yet (not published).
+    lk_fixed = None
+    for r in lk_rates:
+        if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
+            lk_fixed = r
+            break
+
     # Swap history from DB
     swap_history = {}
     for tenor in ["3 Yr", "5 Yr", "10 Yr"]:
@@ -622,8 +627,8 @@ async def _fetch_all_data(
             has_swap_history = True
     swap_rows = _build_swap_rows(swap_rates, swap_history)
 
-    # Estimated next Lånekassen rates
-    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_current)
+    # Estimated next Lånekassen rates (use lk_fixed which has actual fixed rates)
+    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
 
     # Store bank history (products + estimates)
     if products_by_tenor:
@@ -644,11 +649,11 @@ async def _fetch_all_data(
     # Bank rate summary rows (like swap_rows but for Finansportalen effective rates)
     bank_rows = _build_bank_rows(estimates, bank_rate_history)
 
-    # Savings
-    savings = _compute_savings(lk_current, loan_amount, estimates) if lk_current else []
+    # Savings (use lk_fixed which has actual fixed rates for comparison)
+    savings = _compute_savings(lk_fixed, loan_amount, estimates) if lk_fixed else []
 
     # Recommendation
-    signal = _recommend(lk_current, swap_history, estimates, loan_amount=loan_amount)
+    signal = _recommend(lk_fixed, swap_history, estimates, loan_amount=loan_amount)
 
     # Application window
     cw = current_window()
@@ -677,7 +682,7 @@ async def _fetch_all_data(
         window_countdown_label = window_countdown_target.strftime("%d. %B %Y kl. %H:%M")
 
     return {
-        "lanekassen": lk_current,
+        "lanekassen": lk_fixed or lk_current,
         "lanekassen_all": lk_rates[:6],
         "swap_rates": swap_rates,
         "swap_rows": swap_rows,

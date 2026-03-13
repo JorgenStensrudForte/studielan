@@ -260,6 +260,7 @@
             const rOld = s.fixed_rate;
             const remainingBindingYears = tenorYears(tenor);
             const n = Math.round(remainingLoanYears * 12);
+            const T = Math.round(remainingBindingYears * 12);
             const legacyN = Math.max(1, remainingBindingYears * 12 - 2);
 
             const bracket = interpolationBracket(remainingBindingYears);
@@ -280,10 +281,10 @@
             const aNew = annuity(P, rmNew, n);
             const deltaA = aNew - aOld;
 
-            const nonDisc = deltaA * n;
+            const nonDisc = deltaA * T;
 
             let npv = 0;
-            for (let t = 1; t <= n; t++) {
+            for (let t = 1; t <= T; t++) {
                 npv += deltaA / Math.pow(1 + rmNew, t);
             }
 
@@ -291,7 +292,7 @@
             const term1 = deltaA / Math.pow(1 + rmNew, 1);
             const term2 = deltaA / Math.pow(1 + rmNew, 2);
             const term3 = deltaA / Math.pow(1 + rmNew, 3);
-            const termN = deltaA / Math.pow(1 + rmNew, n);
+            const termT = deltaA / Math.pow(1 + rmNew, T);
 
             const aOldLegacy = annuity(P, rmOld, legacyN);
             const aNewLegacy = annuity(P, rmLegacy, legacyN);
@@ -373,16 +374,16 @@
                + '</div>';
 
             row(5, 'Beregnet ny markedsrente', fmt(rNew, 3) + ' %');
-            row(6, 'Gjenstående måneder i lånet (n)', n + ' mnd',
-                fmt(remainingLoanYears, 2) + ' \u00d7 12 = ' + n + ' (faktisk nedbetalingstid)');
+            row(6, 'Bindingsperiode (T)', T + ' mnd',
+                fmt(remainingBindingYears, 0) + ' \u00d7 12 = ' + T + ' mnd');
             row(7, 'Terminbeløp med gammel rente', fmtKr(aOld),
                 'r_m = ' + fmt(rOld, 3) + '% / 12 = ' + fmt(rmOld, 6)
                 + '   A = ' + fmtKr(P) + ' \u00d7 ' + fmt(rmOld, 6)
-                + ' / (1 \u2212 (1+' + fmt(rmOld, 6) + ')\u207b' + n + ')');
+                + ' / (1 \u2212 (1+' + fmt(rmOld, 6) + ')\u207b' + n + ') (n=' + n + ' restløpetid)');
             row(8, 'Terminbeløp med ny rente', fmtKr(aNew),
                 'r_m = ' + fmt(rNew, 3) + '% / 12 = ' + fmt(rmNew, 6)
                 + '   A = ' + fmtKr(P) + ' \u00d7 ' + fmt(rmNew, 6)
-                + ' / (1 \u2212 (1+' + fmt(rmNew, 6) + ')\u207b' + n + ')');
+                + ' / (1 \u2212 (1+' + fmt(rmNew, 6) + ')\u207b' + n + ') (n=' + n + ' restløpetid)');
 
             h += '<div class="flex justify-between items-baseline py-2.5 border-b border-gray-800/50">'
                + '<span class="text-sm text-gray-300"><span class="text-gray-600 font-mono text-xs mr-2">9.</span>Månedlig differanse (\u0394A)</span>'
@@ -391,21 +392,21 @@
                + '<p class="text-[10px] text-gray-600 font-mono py-0.5">'
                + fmt(aNew, 2) + ' \u2212 ' + fmt(aOld, 2) + ' = ' + fmt(deltaA, 2) + '</p>';
 
-            row(10, 'Ikke-diskontert total (\u0394A \u00d7 n)', sign(nonDisc) + fmtKr(nonDisc),
-                fmt(deltaA, 2) + ' \u00d7 ' + n + ' = ' + fmt(nonDisc, 2));
+            row(10, 'Ikke-diskontert total (\u0394A \u00d7 T)', sign(nonDisc) + fmtKr(nonDisc),
+                fmt(deltaA, 2) + ' \u00d7 ' + T + ' = ' + fmt(nonDisc, 2));
 
             h += '<div class="py-3 border-b border-gray-800/50">'
                + '<p class="text-sm text-gray-300 mb-2"><span class="text-gray-600 font-mono text-xs mr-2">11.</span>Diskontert nåverdi (finansavtaleforskriften \u00a7 2-1)</p>'
                + '<div class="bg-gray-800/50 rounded-lg p-4 space-y-2">'
-               + '<p class="text-xs text-gray-500 font-mono">NV = \u03a3<sub>t=1</sub><sup>' + n + '</sup> \u0394A / (1 + r<sub>m,ny</sub>)<sup>t</sup></p>'
+               + '<p class="text-xs text-gray-500 font-mono">NV = \u03a3<sub>t=1</sub><sup>' + T + '</sup> \u0394A / (1 + r<sub>m,ny</sub>)<sup>t</sup></p>'
                + '<p class="text-xs text-gray-500 font-mono">r<sub>m,ny</sub> = ' + fmt(rNew, 3) + '% / 12 = ' + fmt(rmNew, 6) + '</p>'
                + '<p class="text-xs text-gray-600 font-mono mt-1">'
                + '= ' + fmt(deltaA, 2) + '/(1+' + fmt(rmNew, 6) + ')<sup>1</sup>'
                + ' + ' + fmt(deltaA, 2) + '/(1+' + fmt(rmNew, 6) + ')<sup>2</sup>'
                + ' + ' + fmt(deltaA, 2) + '/(1+' + fmt(rmNew, 6) + ')<sup>3</sup>'
-               + ' + \u2026 + /(1+' + fmt(rmNew, 6) + ')<sup>' + n + '</sup></p>'
+               + ' + \u2026 + /(1+' + fmt(rmNew, 6) + ')<sup>' + T + '</sup></p>'
                + '<p class="text-xs text-gray-600 font-mono">'
-               + '= ' + fmt(term1, 2) + ' + ' + fmt(term2, 2) + ' + ' + fmt(term3, 2) + ' + \u2026 + ' + fmt(termN, 2) + '</p>'
+               + '= ' + fmt(term1, 2) + ' + ' + fmt(term2, 2) + ' + ' + fmt(term3, 2) + ' + \u2026 + ' + fmt(termT, 2) + '</p>'
                + '<p class="text-xl font-mono font-bold ' + clr + ' mt-2">' + sign(npv) + fmtKr(npv) + '</p>'
                + '</div></div>';
 
@@ -442,11 +443,11 @@
             h += '<div class="mt-4 p-4 rounded-lg ' + (pos ? 'bg-emerald-900/30 border border-emerald-800/50' : 'bg-red-900/30 border border-red-800/50') + '">'
                + '<p class="text-sm font-semibold ' + (pos ? 'text-emerald-300' : 'text-red-300') + '">'
                + (pos
-                   ? 'Binding nå sparer deg ' + fmtKr(Math.abs(npv)) + ' (nåverdi) over ' + fmt(remainingLoanYears, 2) + ' år'
-                   : 'Venting sparer deg ' + fmtKr(Math.abs(npv)) + ' (nåverdi) - neste rente forventes lavere')
+                   ? 'Binding nå sparer deg ' + fmtKr(Math.abs(npv)) + ' (nåverdi) over ' + fmt(remainingBindingYears, 0) + ' år bindingsperiode'
+                   : 'Venting sparer deg ' + fmtKr(Math.abs(npv)) + ' (nåverdi) over ' + fmt(remainingBindingYears, 0) + ' år - neste rente forventes lavere')
                + '</p>'
                + '<p class="text-xs ' + (pos ? 'text-emerald-400/60' : 'text-red-400/60') + ' mt-1">'
-               + 'Beregnet iht. finansavtaleforskriften \u00a7 2-1 med månedlig diskontering og faktisk gjenstående løpetid'
+               + 'Beregnet iht. finansavtaleforskriften \u00a7 2-1 med månedlig diskontering over bindingsperioden'
                + '</p></div>';
 
             document.getElementById('modal-title').textContent = 'Detaljert utregning \u2013 Fast ' + tenor;
