@@ -112,6 +112,8 @@ def _build_timeline(
         # Build products_by_tenor for this date
         by_tenor: dict[int, list[BankProduct]] = defaultdict(list)
         for pid, rate in current_rates.items():
+            if rate < 0.5:  # Skip bogus 0% rates from Finansportalen
+                continue
             bank_name, bound_years = _PRODUCT_ID_MAP[pid]
             by_tenor[bound_years].append(BankProduct(
                 bank=bank_name,
