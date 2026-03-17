@@ -44,11 +44,16 @@ async def collect_daily_snapshot():
 
         try:
             lk_rates = await lanekassen.fetch_rates()
-            lk = lk_rates[0] if lk_rates else None
         except Exception:
-            lk = None
+            lk_rates = []
 
-        estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
+        lk_fixed = None
+        for r in lk_rates:
+            if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
+                lk_fixed = r
+                break
+
+        estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
         await db.insert_bank_rate_estimates(estimates, products_by_tenor)
         results["estimates"] = len(estimates)
     except Exception as e:
@@ -820,9 +825,15 @@ async def partial_rates_overview(request: Request):
     """Combined rates overview: LK + Swap + Bank estimates."""
     try:
         lk_rates = await lanekassen.fetch_rates()
-        lk = lk_rates[0] if lk_rates else None
     except Exception:
-        lk = None
+        lk_rates = []
+
+    # Find the most recent period with actual fixed rates
+    lk_fixed = None
+    for r in lk_rates:
+        if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
+            lk_fixed = r
+            break
 
     try:
         swap_rates_data = await seb.fetch_swap_rates()
@@ -843,12 +854,12 @@ async def partial_rates_overview(request: Request):
         products_by_tenor = await finansportalen.fetch_products_by_tenor(top_n=5)
     except Exception:
         products_by_tenor = {}
-    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
+    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
     bank_rows = _build_bank_rows(estimates, bank_rate_history)
 
     return templates.TemplateResponse("partials/rates_overview.html", {
         "request": request,
-        "lanekassen": lk,
+        "lanekassen": lk_fixed,
         "swap_rows": swap_rows,
         "bank_rows": bank_rows,
     })
@@ -858,10 +869,14 @@ async def partial_rates_overview(request: Request):
 async def partial_lanekassen(request: Request):
     try:
         rates = await lanekassen.fetch_rates()
-        lk = rates[0] if rates else None
     except Exception:
-        lk = None
-    return templates.TemplateResponse("partials/lanekassen.html", {"request": request, "lanekassen": lk})
+        rates = []
+    lk_fixed = None
+    for r in rates:
+        if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
+            lk_fixed = r
+            break
+    return templates.TemplateResponse("partials/lanekassen.html", {"request": request, "lanekassen": lk_fixed})
 
 
 @app.get("/partials/swap", response_class=HTMLResponse)
@@ -890,16 +905,21 @@ async def partial_banker(request: Request):
     updated_at = datetime.now()
     try:
         lk_rates = await lanekassen.fetch_rates()
-        lk = lk_rates[0] if lk_rates else None
     except Exception:
-        lk = None
+        lk_rates = []
+
+    lk_fixed = None
+    for r in lk_rates:
+        if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
+            lk_fixed = r
+            break
 
     try:
         products_by_tenor = await finansportalen.fetch_products_by_tenor(top_n=5)
     except Exception:
         products_by_tenor = {}
 
-    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
+    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
 
     return templates.TemplateResponse("partials/banker.html", {
         "request": request,
@@ -961,17 +981,22 @@ async def partial_vurdering(
 
     try:
         lk_rates = await lanekassen.fetch_rates()
-        lk = lk_rates[0] if lk_rates else None
     except Exception:
-        lk = None
+        lk_rates = []
+
+    lk_fixed = None
+    for r in lk_rates:
+        if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
+            lk_fixed = r
+            break
 
     try:
         products_by_tenor = await finansportalen.fetch_products_by_tenor(top_n=5)
     except Exception:
         products_by_tenor = {}
 
-    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
-    signal = _recommend(lk, swap_history, estimates, loan_amount=belop)
+    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
+    signal = _recommend(lk_fixed, swap_history, estimates, loan_amount=belop)
 
     return templates.TemplateResponse("partials/vurdering.html", {
         "request": request,
