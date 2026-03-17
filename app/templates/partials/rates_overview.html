@@ -18,16 +18,17 @@
         <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Renteoversikt</h2>
         <div class="flex items-center gap-4">
             <span class="htmx-indicator text-xs text-brand-400">Oppdaterer...</span>
-            {% if lanekassen %}<span class="text-xs text-gray-600">{{ lanekassen.period }}</span>{% endif %}
+            {% if lanekassen %}<span class="text-xs text-gray-600">Fast: {{ lanekassen.period }}</span>{% endif %}
         </div>
     </div>
 
-    <!-- Flytende rate -->
-    {% if lanekassen %}
+    <!-- Flytende rate (from newest period) -->
+    {% set flyt = lk_current if lk_current else lanekassen %}
+    {% if flyt %}
     <div class="px-5 py-2.5 border-b border-gray-800/60 flex items-center gap-3">
         <span class="text-[10px] text-gray-500 uppercase tracking-wide font-semibold w-14">Flyt.</span>
-        <span class="font-mono text-base font-semibold text-white tracking-tight">{{ "%.3f"|format(lanekassen.floating) }}%</span>
-        <span class="text-[10px] text-gray-600">nominell</span>
+        <span class="font-mono text-base font-semibold text-white tracking-tight">{{ "%.3f"|format(flyt.floating) }}%</span>
+        <span class="text-[10px] text-gray-600">nominell &middot; {{ flyt.period }}</span>
     </div>
     {% endif %}
 

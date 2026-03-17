@@ -694,6 +694,7 @@ async def _fetch_all_data(
 
     return {
         "lanekassen": lk_fixed or lk_current,
+        "lk_current": lk_current,
         "lanekassen_all": lk_rates[:6],
         "swap_rates": swap_rates,
         "swap_rows": swap_rows,
@@ -857,9 +858,12 @@ async def partial_rates_overview(request: Request):
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
     bank_rows = _build_bank_rows(estimates, bank_rate_history)
 
+    lk_current = lk_rates[0] if lk_rates else None
+
     return templates.TemplateResponse("partials/rates_overview.html", {
         "request": request,
         "lanekassen": lk_fixed,
+        "lk_current": lk_current,
         "swap_rows": swap_rows,
         "bank_rows": bank_rows,
     })
