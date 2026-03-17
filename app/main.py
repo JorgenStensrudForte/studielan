@@ -917,23 +917,29 @@ async def partial_besparelse(
 ):
     try:
         rates = await lanekassen.fetch_rates()
-        lk = rates[0] if rates else None
     except Exception:
-        lk = None
+        rates = []
+
+    # Find the most recent period with actual fixed rates
+    lk_fixed = None
+    for r in rates:
+        if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
+            lk_fixed = r
+            break
 
     try:
         products_by_tenor = await finansportalen.fetch_products_by_tenor(top_n=5)
     except Exception:
         products_by_tenor = {}
 
-    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk)
-    savings = _compute_savings(lk, belop, estimates) if lk else []
+    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
+    savings = _compute_savings(lk_fixed, belop, estimates) if lk_fixed else []
     return templates.TemplateResponse("partials/besparelse.html", {
         "request": request,
         "savings": savings,
         "loan_amount": belop,
         "remaining_years": remaining_years,
-        "lanekassen": lk,
+        "lanekassen": lk_fixed,
         "estimates": estimates,
     })
 
