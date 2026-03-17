@@ -167,7 +167,10 @@ def _anchor_rate_for_days(history: list[dict], days: int, now_dt: datetime) -> f
         if observed_raw is None or rate_raw is None:
             continue
         try:
-            parsed.append((datetime.fromisoformat(observed_raw), float(rate_raw)))
+            dt = datetime.fromisoformat(observed_raw)
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            parsed.append((dt, float(rate_raw)))
         except (TypeError, ValueError):
             continue
 
@@ -207,7 +210,10 @@ def _bank_anchor_rate(history: list[dict], days: int, now_dt: datetime) -> float
         if d is None or r is None:
             continue
         try:
-            parsed.append((datetime.fromisoformat(d), float(r)))
+            dt = datetime.fromisoformat(d)
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            parsed.append((dt, float(r)))
         except (TypeError, ValueError):
             continue
     if len(parsed) < 2:
@@ -307,8 +313,8 @@ def _tenor_signal(
         oldest_rate = swap_history[0]["rate"]
         swap_trend = round(newest_rate - oldest_rate, 3)
         try:
-            newest_dt = datetime.fromisoformat(swap_history[-1]["observed_at"])
-            oldest_dt = datetime.fromisoformat(swap_history[0]["observed_at"])
+            newest_dt = datetime.fromisoformat(swap_history[-1]["observed_at"]).replace(tzinfo=None)
+            oldest_dt = datetime.fromisoformat(swap_history[0]["observed_at"]).replace(tzinfo=None)
             swap_days = (newest_dt - oldest_dt).days
         except (ValueError, KeyError):
             swap_days = len(swap_history)
