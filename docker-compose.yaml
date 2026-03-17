@@ -1,29 +1,9 @@
 services:
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    expose:
-      - "80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-    environment:
-      - AUTH_USER=${AUTH_USER:-admin}
-      - AUTH_HASH=${AUTH_HASH}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.studielan.rule=Host(`studielan.77-42-36-80.sslip.io`)"
-      - "traefik.http.routers.studielan.entrypoints=http,https"
-      - "traefik.http.routers.studielan.tls=true"
-      - "traefik.http.routers.studielan.tls.certresolver=letsencrypt"
-      - "traefik.http.services.studielan.loadbalancer.server.port=80"
-    depends_on:
-      - backend
-
   backend:
     build: .
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - studielan-data:/app/data
     expose:
       - "8000"
     healthcheck:
@@ -31,3 +11,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  studielan-data:
