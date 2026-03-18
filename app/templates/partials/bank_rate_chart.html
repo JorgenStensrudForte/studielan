@@ -1,12 +1,18 @@
 {% set lens = bank_rate_history.values() | map('length') | list %}
 {% set has_bank_history = lens | max > 1 if lens else false %}
 {% if has_bank_history %}
-<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5" data-chart-card>
     <div class="flex items-center justify-between mb-3">
         <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Estimert LK-fastrente (effektiv)</h2>
-        <span class="text-xs text-gray-600">Topp 5 banksnitt &minus; 0,15pp</span>
+        <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-600">Topp 5 banksnitt &minus; 0,15pp</span>
+            <button onclick="toggleChartFullscreen(this)" class="chart-expand-btn items-center justify-center w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors" title="Fullskjerm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
+            </button>
+        </div>
     </div>
     <canvas id="bank-rate-chart"></canvas>
+    <p class="text-[10px] text-gray-600 mt-2 md:hidden text-center">Knip for å zoome &middot; Dra for å panorere &middot; Dobbelttrykk for å nullstille</p>
 </div>
 <script>
 (function() {
@@ -51,37 +57,43 @@
         });
     }
 
+    const isMobile = window.innerWidth < 768;
     const ctx = document.getElementById('bank-rate-chart');
     if (ctx && datasets.length) {
         if (ctx._chartInstance) ctx._chartInstance.destroy();
+        const ar = isMobile ? 1.6 : 3;
         const chart = new Chart(ctx, {
             type: 'line',
             data: { labels: allDates, datasets },
             options: {
                 responsive: true,
-                aspectRatio: 3,
+                aspectRatio: ar,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
                         labels: {
                             usePointStyle: true,
                             pointStyle: 'line',
-                            boxWidth: 20,
-                            font: { size: 11 },
+                            boxWidth: isMobile ? 14 : 20,
+                            font: { size: isMobile ? 10 : 11 },
                         },
                     },
                     tooltip: {
                         callbacks: {
                             label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(3) + '%',
                         }
-                    }
+                    },
+                    zoom: {
+                        zoom: { pinch: { enabled: true }, wheel: { enabled: false }, mode: 'x' },
+                        pan: { enabled: true, mode: 'x' },
+                    },
                 },
                 scales: {
                     x: {
                         grid: { display: false },
                         ticks: {
-                            maxTicksLimit: 12,
-                            font: { size: 10 },
+                            maxTicksLimit: isMobile ? 6 : 12,
+                            font: { size: isMobile ? 9 : 10 },
                             maxRotation: 45,
                             minRotation: 0,
                         },
@@ -90,13 +102,24 @@
                         grid: { color: '#1f2937' },
                         ticks: {
                             callback: v => v.toFixed(2) + '%',
-                            font: { size: 10 },
+                            font: { size: isMobile ? 9 : 10 },
                         },
                     },
                 },
             },
         });
+        chart._origAspectRatio = ar;
         ctx._chartInstance = chart;
+
+        /* Double-tap to reset zoom on mobile */
+        if (isMobile) {
+            let lastTap = 0;
+            ctx.addEventListener('touchend', function() {
+                const now = Date.now();
+                if (now - lastTap < 300) chart.resetZoom();
+                lastTap = now;
+            });
+        }
     }
 })();
 </script>
