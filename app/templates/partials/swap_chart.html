@@ -4,7 +4,7 @@
 {% set has_bank = bank_lens | max > 1 if bank_lens else false %}
 
 {% if has_swap or has_bank %}
-<div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+<div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden" data-chart-card>
     <!-- Tab bar -->
     <div class="flex items-center justify-between border-b border-gray-800 px-5 pt-4 pb-0">
         <div id="chart-tabs" class="flex gap-1">
@@ -24,7 +24,12 @@
             </button>
             {% endif %}
         </div>
-        <span id="chart-subtitle" class="text-xs text-gray-600 pb-1.5"></span>
+        <div class="flex items-center gap-2 pb-1.5">
+            <span id="chart-subtitle" class="text-xs text-gray-600"></span>
+            <button onclick="toggleChartFullscreen(this)" class="chart-expand-btn items-center justify-center w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors" title="Fullskjerm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
+            </button>
+        </div>
     </div>
 
     <!-- Chart canvases -->
@@ -44,6 +49,7 @@
             <canvas id="combined-chart"></canvas>
         </div>
         {% endif %}
+        <p class="text-[10px] text-gray-600 mt-2 md:hidden text-center">Knip for å zoome &middot; Dra for å panorere &middot; Dobbelttrykk for å nullstille</p>
     </div>
 </div>
 
@@ -160,26 +166,48 @@
         label: ctx => ctx.dataset.label + ': ' + ctx.raw.y.toFixed(3) + '%',
     };
 
+    /* ── Mobile detection ── */
+    const isMobile = window.innerWidth < 768;
+
+    /* ── Zoom plugin config ── */
+    const zoomConfig = {
+        zoom: {
+            pinch: { enabled: true },
+            wheel: { enabled: false },
+            mode: 'x',
+        },
+        pan: {
+            enabled: true,
+            mode: 'x',
+        },
+        limits: {
+            x: { minRange: 7 * 24 * 60 * 60 * 1000 }, /* min 1 week */
+        },
+    };
+
     /* ── Standard chart (single y-axis) ── */
     function makeOptions(aspectRatio, xMin) {
+        const mobileAR = (aspectRatio || 3) > 2 ? 1.6 : aspectRatio;
+        const ar = isMobile ? mobileAR : (aspectRatio || 3);
         const opts = {
             responsive: true,
-            aspectRatio: aspectRatio || 3,
+            aspectRatio: ar,
             interaction: { mode: 'nearest', axis: 'x', intersect: false },
             plugins: {
-                legend: { labels: { usePointStyle: true, pointStyle: 'line', boxWidth: 20, font: { size: 11 } } },
+                legend: { labels: { usePointStyle: true, pointStyle: 'line', boxWidth: isMobile ? 14 : 20, font: { size: isMobile ? 10 : 11 } } },
                 tooltip: { callbacks: tooltipCallbacks },
+                zoom: zoomConfig,
             },
             scales: {
                 x: {
                     type: 'time',
                     time: { unit: 'week', displayFormats: { day: 'dd.MM', week: 'dd.MM', month: 'MMM yy' } },
                     grid: { display: false },
-                    ticks: { maxTicksLimit: 14, font: { size: 10 }, maxRotation: 45, minRotation: 0 },
+                    ticks: { maxTicksLimit: isMobile ? 6 : 14, font: { size: isMobile ? 9 : 10 }, maxRotation: 45, minRotation: 0 },
                 },
                 y: {
                     grid: { color: '#1f2937' },
-                    ticks: { callback: v => v.toFixed(2) + '%', font: { size: 10 } },
+                    ticks: { callback: v => v.toFixed(2) + '%', font: { size: isMobile ? 9 : 10 } },
                 },
             },
         };
@@ -192,6 +220,7 @@
         if (!ctx || !datasets.length) return null;
         if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
         const c = new Chart(ctx, { type: 'line', data: { datasets }, options: makeOptions(aspectRatio, xMin) });
+        c._origAspectRatio = c.options.aspectRatio;
         chartInstances[canvasId] = c;
         return c;
     }
@@ -236,20 +265,21 @@
         if (!datasets.length) return null;
 
         const tickFmt = v => v.toFixed(2) + '%';
+        const dualAR = isMobile ? 1.4 : 2.5;
         const c = new Chart(ctx, {
             type: 'line',
             data: { datasets },
             options: {
                 responsive: true,
-                aspectRatio: 2.5,
+                aspectRatio: dualAR,
                 interaction: { mode: 'nearest', axis: 'x', intersect: false },
                 plugins: {
                     legend: {
                         labels: {
                             usePointStyle: true,
                             pointStyle: 'line',
-                            boxWidth: 20,
-                            font: { size: 11 },
+                            boxWidth: isMobile ? 14 : 20,
+                            font: { size: isMobile ? 10 : 11 },
                             /* Dim swap legend items to match line opacity */
                             generateLabels: chart => {
                                 const orig = Chart.defaults.plugins.legend.labels.generateLabels(chart);
@@ -263,34 +293,51 @@
                         },
                     },
                     tooltip: { callbacks: tooltipCallbacks },
+                    zoom: zoomConfig,
                 },
                 scales: {
                     x: {
                         type: 'time',
                         time: { unit: 'week', displayFormats: { day: 'dd.MM', week: 'dd.MM', month: 'MMM yy' } },
                         grid: { display: false },
-                        ticks: { maxTicksLimit: 14, font: { size: 10 }, maxRotation: 45, minRotation: 0 },
+                        ticks: { maxTicksLimit: isMobile ? 6 : 14, font: { size: isMobile ? 9 : 10 }, maxRotation: 45, minRotation: 0 },
                         min: xMin || undefined,
                     },
                     ySwap: {
                         type: 'linear',
                         position: 'left',
-                        title: { display: true, text: 'Swap', color: COLORS.green + '99', font: { size: 10, weight: 'normal' } },
+                        title: { display: true, text: 'Swap', color: COLORS.green + '99', font: { size: isMobile ? 9 : 10, weight: 'normal' } },
                         grid: { color: '#1f293740' },
-                        ticks: { callback: tickFmt, font: { size: 10 }, color: '#9ca3af80' },
+                        ticks: { callback: tickFmt, font: { size: isMobile ? 9 : 10 }, color: '#9ca3af80' },
                     },
                     yBank: {
                         type: 'linear',
                         position: 'right',
-                        title: { display: true, text: 'Est. LK eff.', color: COLORS.pink, font: { size: 10, weight: 'bold' } },
+                        title: { display: true, text: 'Est. LK eff.', color: COLORS.pink, font: { size: isMobile ? 9 : 10, weight: 'bold' } },
                         grid: { drawOnChartArea: false },
-                        ticks: { callback: tickFmt, font: { size: 10 }, color: COLORS.pink },
+                        ticks: { callback: tickFmt, font: { size: isMobile ? 9 : 10 }, color: COLORS.pink },
                     },
                 },
             },
         });
+        c._origAspectRatio = dualAR;
         chartInstances[canvasId] = c;
         return c;
+    }
+
+    /* ── Double-tap to reset zoom ── */
+    if (isMobile) {
+        document.querySelectorAll('#chart-panel-swap canvas, #chart-panel-bank canvas, #chart-panel-combined canvas').forEach(c => {
+            let lastTap = 0;
+            c.addEventListener('touchend', function(e) {
+                const now = Date.now();
+                if (now - lastTap < 300) {
+                    const chart = Chart.getChart(c);
+                    if (chart) chart.resetZoom();
+                }
+                lastTap = now;
+            });
+        });
     }
 
     /* ── Render initial swap chart ── */
