@@ -92,3 +92,61 @@ def days_until_next_window() -> int:
         return 0
     nw = next_window()
     return (nw[0] - date.today()).days
+
+
+OBSERVATION_MONTHS = [1, 3, 5, 7, 9, 11]
+
+MONTHS_NO = {
+    1: "januar", 2: "februar", 3: "mars", 4: "april",
+    5: "mai", 6: "juni", 7: "juli", 8: "august",
+    9: "september", 10: "oktober", 11: "november", 12: "desember",
+}
+
+
+def observation_schedule(today: date) -> dict:
+    """Determine current, previous, and next observation periods.
+
+    Returns dict with 'current' (if in obs month), 'previous', and 'next',
+    each being a dict with obs/rate year/month/label, or None.
+    """
+    def _make(oy, om):
+        rm = om + 2 if om + 2 <= 12 else om + 2 - 12
+        ry = oy if om + 2 <= 12 else oy + 1
+        label = f"{MONTHS_NO[rm]} {ry}"
+        return {"obs_year": oy, "obs_month": om, "rate_year": ry, "rate_month": rm,
+                "rate_label": label, "obs_label": f"{MONTHS_NO[om]} {oy}"}
+
+    current = None
+    previous = None
+    nxt = None
+
+    if today.month in OBSERVATION_MONTHS:
+        current = _make(today.year, today.month)
+        idx = OBSERVATION_MONTHS.index(today.month)
+        # previous
+        if idx > 0:
+            previous = _make(today.year, OBSERVATION_MONTHS[idx - 1])
+        else:
+            previous = _make(today.year - 1, 11)
+        # next
+        if idx < len(OBSERVATION_MONTHS) - 1:
+            nxt = _make(today.year, OBSERVATION_MONTHS[idx + 1])
+        else:
+            nxt = _make(today.year + 1, 1)
+    else:
+        # Between observation months
+        found = False
+        for i, m in enumerate(OBSERVATION_MONTHS):
+            if m > today.month:
+                nxt = _make(today.year, m)
+                if i > 0:
+                    previous = _make(today.year, OBSERVATION_MONTHS[i - 1])
+                else:
+                    previous = _make(today.year - 1, 11)
+                found = True
+                break
+        if not found:
+            previous = _make(today.year, 11)
+            nxt = _make(today.year + 1, 1)
+
+    return {"current": current, "previous": previous, "next": nxt}

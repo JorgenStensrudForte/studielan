@@ -288,6 +288,34 @@ async def get_bank_estimates_for_month(year: int, month: int) -> list[dict]:
         await conn.close()
 
 
+async def get_bank_products_for_month(bound_years: int, year: int, month: int) -> dict[str, list[dict]]:
+    """Get all bank products for a specific month, keyed by observed_date."""
+    start = f"{year}-{month:02d}-01"
+    if month == 12:
+        end = f"{year + 1}-01-01"
+    else:
+        end = f"{year}-{month + 1:02d}-01"
+
+    conn = await get_db()
+    try:
+        cursor = await conn.execute(
+            """SELECT bank, product_name, nominal_rate, effective_rate,
+                      bound_years, rank, observed_date
+               FROM bank_products
+               WHERE bound_years = ? AND observed_date >= ? AND observed_date < ?
+               ORDER BY observed_date ASC, effective_rate ASC""",
+            (bound_years, start, end),
+        )
+        rows = await cursor.fetchall()
+        result: dict[str, list[dict]] = {}
+        for r in rows:
+            d = dict(r)
+            result.setdefault(d["observed_date"], []).append(d)
+        return result
+    finally:
+        await conn.close()
+
+
 async def get_bank_products_history(bound_years: int, days: int = 365) -> list[dict]:
     """Fetch historical individual bank products for a given tenor."""
     db = await get_db()

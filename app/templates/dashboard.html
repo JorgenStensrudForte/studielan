@@ -222,16 +222,7 @@
     {% include "partials/swap_chart.html" %}
 </div>
 
-<!-- Bank products per tenor + estimates -->
-<div id="banker-panel"
-     class="mb-4"
-     hx-get="/partials/banker"
-     hx-trigger="every 300s"
-     hx-swap="innerHTML">
-    {% include "partials/banker.html" %}
-</div>
-
-{% if weekly_obs %}
+{% if weekly_obs_data %}
 <div class="mb-4">
     {% include "partials/weekly_observations.html" %}
 </div>

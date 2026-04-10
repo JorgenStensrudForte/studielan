@@ -1,124 +1,156 @@
-<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Ukentlige observasjoner (Finanstilsynets metodikk)</h2>
-        <span class="text-xs text-gray-500">{{ weekly_obs.month_label }}</span>
-    </div>
-    <p class="text-xs text-gray-600 mb-4">Basisrente = snitt av ukentlige onsdagsobservasjoner i observasjonsmåneden</p>
+{% set obs_data = weekly_obs_data %}
+{% if obs_data %}
 
-    {% set tenors = ["3 år", "5 år", "10 år"] %}
-    {% set obs = weekly_obs %}
-    {% set ns = namespace(has_data=false) %}
-    {% for t in tenors %}
-        {% if obs.tenors[t] and obs.tenors[t].weeks %}
-            {% set ns.has_data = true %}
-        {% endif %}
-    {% endfor %}
+{# Determine which observation to show: current (if in obs month) or previous (completed) #}
+{% set active_obs = obs_data.current_obs if obs_data.current_obs and obs_data.current_obs.has_data else obs_data.previous_obs %}
+{% set schedule = obs_data.schedule %}
 
-    {% if ns.has_data %}
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead>
-                <tr class="text-gray-500 text-xs">
-                    <th class="text-left pb-2 pr-4">Uke</th>
-                    <th class="text-left pb-2 pr-2">Dato</th>
-                    {% for t in tenors %}
-                    <th class="text-right pb-2 pl-3" colspan="2">{{ t }}</th>
-                    {% endfor %}
-                </tr>
-                <tr class="text-gray-600 text-[10px]">
-                    <th></th>
-                    <th></th>
-                    {% for t in tenors %}
-                    <th class="text-right pb-1 pl-3">Snitt eff.</th>
-                    <th class="text-right pb-1 pl-1">LK nom.</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody class="text-gray-200">
-                {% for week_num in range(1, obs.wednesdays_total + 1) %}
-                <tr class="border-t border-gray-800/30">
-                    <td class="py-1.5 text-gray-500 text-xs">{{ week_num }}</td>
-                    <td class="py-1.5 text-xs text-gray-400">
-                        {% set found = false %}
-                        {% for t in tenors %}
-                            {% if not found %}
-                                {% for w in obs.tenors[t].weeks %}
-                                    {% if w.week == week_num and not found %}
-                                        {{ w.date[8:10] }}.{{ w.date[5:7] }}
-                                        {% set found = true %}
-                                    {% endif %}
-                                {% endfor %}
-                            {% endif %}
-                        {% endfor %}
-                        {% if not found %}
-                            <span class="text-gray-700">-</span>
-                        {% endif %}
-                    </td>
-                    {% for t in tenors %}
-                        {% set week_data = namespace(found=false) %}
-                        {% for w in obs.tenors[t].weeks %}
-                            {% if w.week == week_num %}
-                                <td class="text-right font-mono text-xs pl-3">{{ "%.3f"|format(w.avg_top5_eff) }}%</td>
-                                <td class="text-right font-mono text-xs pl-1 text-emerald-400">{{ "%.3f"|format(w.lk_nom) }}%</td>
-                                {% set week_data.found = true %}
-                            {% endif %}
-                        {% endfor %}
-                        {% if not week_data.found %}
-                            <td class="text-right font-mono text-xs pl-3 text-gray-700">-</td>
-                            <td class="text-right font-mono text-xs pl-1 text-gray-700">-</td>
-                        {% endif %}
-                    {% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr class="border-t-2 border-gray-700">
-                    <td class="py-2 text-xs text-gray-400 font-semibold" colspan="2">
-                        Snitt ({{ obs.wednesdays_observed }} av {{ obs.wednesdays_total }} uker)
-                    </td>
-                    {% for t in tenors %}
-                        {% set avg = obs.tenors[t].monthly_avg %}
-                        {% if avg %}
-                        <td class="text-right font-mono text-xs pl-3 text-gray-300 font-medium">{{ "%.3f"|format(avg.avg_top5_eff) }}%</td>
-                        <td class="text-right font-mono text-xs pl-1 text-emerald-300 font-semibold">{{ "%.3f"|format(avg.lk_nom) }}%</td>
-                        {% else %}
-                        <td class="text-right font-mono text-xs pl-3 text-gray-700">-</td>
-                        <td class="text-right font-mono text-xs pl-1 text-gray-700">-</td>
-                        {% endif %}
-                    {% endfor %}
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-
-    {% if weekly_obs_prev %}
-    {% set prev = weekly_obs_prev %}
-    {% set ns2 = namespace(has_data=false) %}
-    {% for t in tenors %}
-        {% if prev.tenors[t] and prev.tenors[t].monthly_avg %}
-            {% set ns2.has_data = true %}
-        {% endif %}
-    {% endfor %}
-    {% if ns2.has_data %}
-    <div class="mt-3 pt-3 border-t border-gray-800/50">
-        <p class="text-xs text-gray-500 mb-2">Forrige måned: {{ prev.month_label }} ({{ prev.wednesdays_observed }} uker)</p>
-        <div class="grid grid-cols-3 gap-3">
-            {% for t in tenors %}
-                {% set avg = prev.tenors[t].monthly_avg %}
-                {% if avg %}
-                <div>
-                    <span class="text-xs text-gray-500">{{ t }}</span>
-                    <p class="font-mono text-xs text-gray-400">Snitt eff: {{ "%.3f"|format(avg.avg_top5_eff) }}%</p>
-                    <p class="font-mono text-xs text-emerald-400/70">LK nom: {{ "%.3f"|format(avg.lk_nom) }}%</p>
-                </div>
+{% if active_obs and active_obs.has_data %}
+<div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+    {# Header #}
+    <div class="px-4 sm:px-5 pt-4 pb-3">
+        <div class="flex items-center justify-between mb-1">
+            <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Basisrente-observasjoner</h2>
+            <span class="text-xs text-gray-500">
+                {% if active_obs == obs_data.current_obs %}
+                Pågående: {{ active_obs.obs_label }}
+                {% else %}
+                Fullført: {{ active_obs.obs_label }}
                 {% endif %}
-            {% endfor %}
+            </span>
         </div>
+        <p class="text-xs text-gray-600">
+            Finanstilsynets metodikk: snitt topp 5 effektive renter per onsdag &rarr; basisrente &minus; 0,15pp &rarr; Lånekassen nominell
+        </p>
     </div>
-    {% endif %}
-    {% endif %}
 
-    {% else %}
-    <p class="text-gray-500 text-sm">Ingen onsdagsobservasjoner ennå for {{ obs.month_label }}. Data samles daglig og onsdager brukes som ukentlige observasjoner.</p>
+    {# Tenor tabs #}
+    <div class="flex border-b border-gray-800 px-4 sm:px-5">
+        {% for years in [3, 5, 10] %}
+        {% set tenor = active_obs.tenors[years] %}
+        <button data-obs-tab="{{ years }}"
+                class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition-colors
+                       {% if years == 3 %}border-b-2 border-emerald-400 text-white{% else %}text-gray-500 hover:text-gray-300{% endif %}"
+                onclick="switchObsTab({{ years }})">
+            {{ years }} år
+            {% if tenor and tenor.lk_nom %}
+            <span class="ml-1 font-mono text-emerald-400 text-[10px] sm:text-xs">{{ "%.2f"|format(tenor.lk_nom) }}%</span>
+            {% endif %}
+        </button>
+        {% endfor %}
+    </div>
+
+    {# Tab panels #}
+    {% for years in [3, 5, 10] %}
+    {% set tenor = active_obs.tenors[years] %}
+    <div id="obs-panel-{{ years }}" class="{% if years != 3 %}hidden{% endif %}">
+        {% if tenor and tenor.weeks %}
+        <div class="px-4 sm:px-5 py-3">
+            <p class="text-xs text-gray-400 font-medium mb-3 uppercase tracking-wider">{{ tenor.title }}</p>
+
+            {# Week-by-week data like the PDF #}
+            <div class="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table class="w-full text-xs sm:text-sm">
+                <thead>
+                    <tr class="text-gray-500 text-[10px] sm:text-xs">
+                        <th class="text-left pb-1.5 pr-2">Dato</th>
+                        <th class="text-left pb-1.5">Bank</th>
+                        <th class="text-right pb-1.5 pl-2">Eff. rente</th>
+                    </tr>
+                </thead>
+                <tbody class="text-gray-300">
+                    {% set ns_week = namespace(idx=0) %}
+                    {% for week in tenor.weeks %}
+                    {# Bank rows for this week #}
+                    {% for bank in week.banks %}
+                    <tr class="{% if loop.first and ns_week.idx > 0 %}border-t border-gray-700/50{% else %}border-t border-gray-800/30{% endif %}">
+                        <td class="py-1 pr-2 text-gray-500 whitespace-nowrap">{% if loop.first %}{{ week.target_date }}{% endif %}</td>
+                        <td class="py-1 truncate max-w-[160px] sm:max-w-[280px]" title="{{ bank.product }}">{{ bank.bank }}</td>
+                        <td class="text-right font-mono pl-2">{{ "%.2f"|format(bank.effective_rate) }}</td>
+                    </tr>
+                    {% endfor %}
+                    {# Weekly average #}
+                    <tr class="border-t border-gray-700">
+                        <td class="py-1.5"></td>
+                        <td class="py-1.5 text-gray-400 font-medium">Snitt uke {{ week.week }}</td>
+                        <td class="text-right font-mono font-semibold text-white pl-2">{{ "%.3f"|format(week.avg_eff) }} %</td>
+                    </tr>
+                    {% set ns_week.idx = ns_week.idx + 1 %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    {# Basisrente #}
+                    <tr class="border-t-2 border-gray-600">
+                        <td class="py-2" colspan="2">
+                            <span class="text-gray-300 font-semibold text-xs sm:text-sm">BASISRENTE</span>
+                            <span class="text-gray-500 text-[10px] sm:text-xs ml-1">(snitt av {{ tenor.weeks_observed }} uker)</span>
+                        </td>
+                        <td class="text-right font-mono font-bold text-white text-sm sm:text-base py-2">{{ "%.3f"|format(tenor.basisrente) }} %</td>
+                    </tr>
+                    {# LK rates #}
+                    <tr class="border-t border-gray-800/50">
+                        <td class="py-1.5" colspan="2">
+                            <span class="text-gray-500 text-xs">Basisrente &minus; 0,15pp (effektiv)</span>
+                        </td>
+                        <td class="text-right font-mono text-gray-400 text-xs">{{ "%.3f"|format(tenor.lk_eff) }} %</td>
+                    </tr>
+                    <tr class="border-t border-gray-800/30">
+                        <td class="py-1.5" colspan="2">
+                            <span class="text-emerald-400 text-xs font-medium">Est. Lånekassen nominell</span>
+                        </td>
+                        <td class="text-right font-mono text-emerald-400 font-semibold">{{ "%.3f"|format(tenor.lk_nom) }} %</td>
+                    </tr>
+                </tfoot>
+            </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="px-4 sm:px-5 py-6 text-center">
+            <p class="text-gray-500 text-sm">Ingen observasjoner ennå for {{ years }} år</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {# Upcoming observation info #}
+    {% if schedule.next and (not obs_data.current_obs or not obs_data.current_obs.has_data) %}
+    <div class="px-4 sm:px-5 py-3 border-t border-gray-800 bg-gray-800/30">
+        <p class="text-xs text-gray-500">
+            Neste observasjonsperiode: <span class="text-gray-400">{{ schedule.next.obs_label }}</span>
+            &rarr; renter for <span class="text-gray-400">{{ schedule.next.rate_label }}</span>
+        </p>
+    </div>
     {% endif %}
 </div>
+
+{# Tab switching script #}
+<script>
+function switchObsTab(years) {
+    [3, 5, 10].forEach(y => {
+        const panel = document.getElementById('obs-panel-' + y);
+        const btn = document.querySelector('[data-obs-tab="' + y + '"]');
+        if (y === years) {
+            panel.classList.remove('hidden');
+            btn.classList.add('border-b-2', 'border-emerald-400', 'text-white');
+            btn.classList.remove('text-gray-500');
+        } else {
+            panel.classList.add('hidden');
+            btn.classList.remove('border-b-2', 'border-emerald-400', 'text-white');
+            btn.classList.add('text-gray-500');
+        }
+    });
+}
+</script>
+
+{% elif schedule.next %}
+{# No data yet, show when next observation starts #}
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Basisrente-observasjoner</h2>
+    <p class="text-sm text-gray-500">
+        Neste observasjonsperiode: <span class="text-gray-300">{{ schedule.next.obs_label }}</span>
+        &rarr; fastsetter renter for <span class="text-gray-300">{{ schedule.next.rate_label }}</span>
+    </p>
+</div>
+{% endif %}
+
+{% endif %}

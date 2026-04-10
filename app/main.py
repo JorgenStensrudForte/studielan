@@ -16,7 +16,7 @@ from app.models import LanekassenRate, Savings, Signal, TenorSignal, EstimatedRa
 from app import db
 from app.services import seb, lanekassen, finansportalen, cbonds
 from app.services import finansportalen_history
-from app.services.weekly_avg import compute_weekly_observations
+from app.services.weekly_avg import get_observations_for_dashboard
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -667,18 +667,10 @@ async def _fetch_all_data(
     # Bank rate summary rows (like swap_rows but for Finansportalen effective rates)
     bank_rows = _build_bank_rows(estimates, bank_rate_history)
 
-    # Weekly observations (Finanstilsynets methodology: Wednesday snapshots, monthly average)
-    today = date.today()
-    weekly_obs = None
-    weekly_obs_prev = None
+    # Weekly observations (Finanstilsynet methodology)
+    weekly_obs_data = None
     try:
-        monthly_rows = await db.get_bank_estimates_for_month(today.year, today.month)
-        weekly_obs = compute_weekly_observations(today.year, today.month, monthly_rows)
-        # Also compute previous month for comparison
-        prev_month = today.month - 1 if today.month > 1 else 12
-        prev_year = today.year if today.month > 1 else today.year - 1
-        prev_rows = await db.get_bank_estimates_for_month(prev_year, prev_month)
-        weekly_obs_prev = compute_weekly_observations(prev_year, prev_month, prev_rows)
+        weekly_obs_data = await get_observations_for_dashboard()
     except Exception as e:
         logger.error(f"Weekly observations failed: {e}")
 
@@ -727,8 +719,7 @@ async def _fetch_all_data(
         "bank_rate_history": bank_rate_history,
         "has_bank_history": has_bank_history,
         "bank_rows": bank_rows,
-        "weekly_obs": weekly_obs,
-        "weekly_obs_prev": weekly_obs_prev,
+        "weekly_obs_data": weekly_obs_data,
         "estimates": estimates,
         "savings": savings,
         "signal": signal,
