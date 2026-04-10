@@ -22,7 +22,7 @@ def _wednesdays_in_month(year: int, month: int) -> list[date]:
     return result
 
 
-def _pick_closest_date(target: date, available_dates: list[str], max_days: int = 2) -> str | None:
+def _pick_closest_date(target: date, available_dates: list[str], max_days: int = 3) -> str | None:
     """Find the closest available date string to the target."""
     best = None
     best_dist = max_days + 1

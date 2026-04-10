@@ -987,7 +987,11 @@ async def db_dates():
         dates = [r["observed_date"] for r in rows]
         cursor2 = await conn.execute("SELECT COUNT(*) as cnt FROM bank_rate_estimates")
         total = (await cursor2.fetchone())["cnt"]
-        return {"total_rows": total, "recent_dates": dates}
+        cursor3 = await conn.execute(
+            "SELECT DISTINCT observed_date FROM bank_products WHERE observed_date >= '2026-03-01' AND observed_date < '2026-04-01' ORDER BY observed_date"
+        )
+        bp_march = [r["observed_date"] for r in await cursor3.fetchall()]
+        return {"total_rows": total, "recent_dates": dates, "bank_products_march": bp_march}
     finally:
         await conn.close()
 
