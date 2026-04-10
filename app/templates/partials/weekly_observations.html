@@ -7,14 +7,14 @@
 
     {% set tenors = ["3 år", "5 år", "10 år"] %}
     {% set obs = weekly_obs %}
-    {% set has_data = false %}
+    {% set ns = namespace(has_data=false) %}
     {% for t in tenors %}
         {% if obs.tenors[t] and obs.tenors[t].weeks %}
-            {% set has_data = true %}
+            {% set ns.has_data = true %}
         {% endif %}
     {% endfor %}
 
-    {% if has_data %}
+    {% if ns.has_data %}
     <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead>
@@ -93,13 +93,13 @@
 
     {% if weekly_obs_prev %}
     {% set prev = weekly_obs_prev %}
-    {% set prev_has_data = false %}
+    {% set ns2 = namespace(has_data=false) %}
     {% for t in tenors %}
         {% if prev.tenors[t] and prev.tenors[t].monthly_avg %}
-            {% set prev_has_data = true %}
+            {% set ns2.has_data = true %}
         {% endif %}
     {% endfor %}
-    {% if prev_has_data %}
+    {% if ns2.has_data %}
     <div class="mt-3 pt-3 border-t border-gray-800/50">
         <p class="text-xs text-gray-500 mb-2">Forrige måned: {{ prev.month_label }} ({{ prev.wednesdays_observed }} uker)</p>
         <div class="grid grid-cols-3 gap-3">
