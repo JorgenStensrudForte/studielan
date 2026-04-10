@@ -16,7 +16,6 @@ BASE_PARAMS = {
     "loanType[0]": "standardlån",
     "isSalaryRequired": "false",
     "membershipType[0]": "None",
-    "requiredProductTypes[0]": "None",
 }
 
 
