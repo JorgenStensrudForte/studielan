@@ -984,6 +984,23 @@ async def oppdater():
         return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
 
 
+@app.get("/api/db-dates")
+async def db_dates():
+    """Check what dates exist in bank_rate_estimates."""
+    conn = await db.get_db()
+    try:
+        cursor = await conn.execute(
+            "SELECT DISTINCT observed_date FROM bank_rate_estimates ORDER BY observed_date DESC LIMIT 30"
+        )
+        rows = await cursor.fetchall()
+        dates = [r["observed_date"] for r in rows]
+        cursor2 = await conn.execute("SELECT COUNT(*) as cnt FROM bank_rate_estimates")
+        total = (await cursor2.fetchone())["cnt"]
+        return {"total_rows": total, "recent_dates": dates}
+    finally:
+        await conn.close()
+
+
 @app.post("/api/collect")
 async def collect():
     """Manual trigger: collect and store all data (swap + banks + estimates)."""
