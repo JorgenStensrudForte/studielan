@@ -25,6 +25,12 @@ _BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
 
 
+def _render(template_name: str, **context) -> HTMLResponse:
+    """Render template directly to avoid Jinja2 LRU cache hashability bug."""
+    template = templates.get_template(template_name)
+    return HTMLResponse(template.render(**context))
+
+
 async def collect_daily_snapshot():
     """Fetch and store swap rates + bank data. Called by scheduler and /api/collect."""
     results = {"swap": 0, "banks": 0, "estimates": 0, "errors": []}
@@ -752,7 +758,7 @@ async def dashboard(
     remaining_years: int = Query(default=settings.default_remaining_years, ge=1, le=40),
 ):
     data = await _fetch_all_data(belop, remaining_years=remaining_years)
-    return templates.TemplateResponse("dashboard.html", {"request": request, **data})
+    return _render("dashboard.html", request=request, **data)
 
 
 @app.get("/api/dashboard")
@@ -851,7 +857,7 @@ async def partial_lanekassen(request: Request):
         if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
             lk_fixed = r
             break
-    return templates.TemplateResponse("partials/lanekassen.html", {"request": request, "lanekassen": lk_fixed})
+    return _render("partials/lanekassen.html", request=request, lanekassen=lk_fixed)
 
 
 @app.get("/partials/swap", response_class=HTMLResponse)
@@ -867,12 +873,8 @@ async def partial_swap(request: Request):
         swap_history[tenor] = await db.get_swap_history(tenor, days=90)
     swap_rows = _build_swap_rows(rates, swap_history)
 
-    return templates.TemplateResponse("partials/swap_rates.html", {
-        "request": request,
-        "swap_rates": rates,
-        "swap_rows": swap_rows,
-        "swap_history": swap_history,
-    })
+    return _render("partials/swap_rates.html",
+        request=request, swap_rates=rates, swap_rows=swap_rows, swap_history=swap_history)
 
 
 @app.get("/partials/banker", response_class=HTMLResponse)
@@ -896,12 +898,9 @@ async def partial_banker(request: Request):
 
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
 
-    return templates.TemplateResponse("partials/banker.html", {
-        "request": request,
-        "products_by_tenor": products_by_tenor,
-        "banker_updated_at": updated_at,
-        "estimates": estimates,
-    })
+    return _render("partials/banker.html",
+        request=request, products_by_tenor=products_by_tenor,
+        banker_updated_at=updated_at, estimates=estimates)
 
 
 @app.get("/partials/besparelse", response_class=HTMLResponse)
@@ -929,14 +928,9 @@ async def partial_besparelse(
 
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
     savings = _compute_savings(lk_fixed, belop, estimates) if lk_fixed else []
-    return templates.TemplateResponse("partials/besparelse.html", {
-        "request": request,
-        "savings": savings,
-        "loan_amount": belop,
-        "remaining_years": remaining_years,
-        "lanekassen": lk_fixed,
-        "estimates": estimates,
-    })
+    return _render("partials/besparelse.html",
+        request=request, savings=savings, loan_amount=belop,
+        remaining_years=remaining_years, lanekassen=lk_fixed, estimates=estimates)
 
 
 @app.get("/partials/vurdering", response_class=HTMLResponse)
@@ -973,11 +967,9 @@ async def partial_vurdering(
     estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
     signal = _recommend(lk_fixed, swap_history, estimates, loan_amount=belop)
 
-    return templates.TemplateResponse("partials/vurdering.html", {
-        "request": request,
-        "signal": signal,
-        "has_swap_history": any(len(h) >= 2 for h in swap_history.values()),
-    })
+    return _render("partials/vurdering.html",
+        request=request, signal=signal,
+        has_swap_history=any(len(h) >= 2 for h in swap_history.values()))
 
 
 # --- Admin endpoints ---

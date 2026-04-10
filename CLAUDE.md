@@ -17,6 +17,12 @@ Ingen Supabase, ingen auth, ingen frontend build step.
 - Jinja2 + HTMX + Tailwind CDN for frontend
 - httpx for HTTP-kall (async)
 
+## Coolify (deploy)
+- API: `http://77.42.36.80:8000`, app UUID `kswgg8ckcgo444gsowocg00k`
+- Deploy: `source infra/coolify/.env && bash infra/coolify/coolify.sh deploy`
+- Logs: `source infra/coolify/.env && bash infra/coolify/coolify.sh logs`
+- Status: `source infra/coolify/.env && bash infra/coolify/coolify.sh status`
+
 ## Mappestruktur
 - `app/main.py` - FastAPI app, routes, templates
 - `app/config.py` - Settings, konstanter
@@ -24,4 +30,5 @@ Ingen Supabase, ingen auth, ingen frontend build step.
 - `app/db.py` - SQLite
 - `app/services/` - Datakilder (lanekassen, seb, finansportalen, cbonds)
 - `app/templates/` - Jinja2 templates
+- `infra/coolify/` - Deploy script + .env (gitignored)
 - `data/` - SQLite database (gitignored)
