@@ -6,26 +6,26 @@
 {% if has_swap or has_bank %}
 <div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden" data-chart-card>
     <!-- Tab bar -->
-    <div class="flex items-center justify-between border-b border-gray-800 px-5 pt-4 pb-0">
+    <div class="flex items-center justify-between border-b border-gray-800 px-3 sm:px-5 pt-3 sm:pt-4 pb-0">
         <div id="chart-tabs" class="flex gap-1">
             {% if has_swap %}
-            <button data-chart-tab="swap" class="px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 border-gray-700 bg-gray-800 text-white -mb-px relative z-10 transition-colors">
-                Swap-renter
+            <button data-chart-tab="swap" class="px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold rounded-t-lg border border-b-0 border-gray-700 bg-gray-800 text-white -mb-px relative z-10 transition-colors">
+                Swap
             </button>
             {% endif %}
             {% if has_bank %}
-            <button data-chart-tab="bank" class="px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 border-gray-800 bg-gray-900 text-gray-500 -mb-px relative z-0 transition-colors hover:text-gray-300">
-                Bankrenter eff.
+            <button data-chart-tab="bank" class="px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold rounded-t-lg border border-b-0 border-gray-800 bg-gray-900 text-gray-500 -mb-px relative z-0 transition-colors hover:text-gray-300">
+                Bank eff.
             </button>
             {% endif %}
             {% if has_swap and has_bank %}
-            <button data-chart-tab="combined" class="px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 border-gray-800 bg-gray-900 text-gray-500 -mb-px relative z-0 transition-colors hover:text-gray-300">
+            <button data-chart-tab="combined" class="px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold rounded-t-lg border border-b-0 border-gray-800 bg-gray-900 text-gray-500 -mb-px relative z-0 transition-colors hover:text-gray-300">
                 Samlet
             </button>
             {% endif %}
         </div>
         <div class="flex items-center gap-2 pb-1.5">
-            <span id="chart-subtitle" class="text-xs text-gray-600"></span>
+            <span id="chart-subtitle" class="text-[10px] sm:text-xs text-gray-600"></span>
             <button onclick="toggleChartFullscreen(this)" class="chart-expand-btn items-center justify-center w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors" title="Fullskjerm">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
             </button>
@@ -33,7 +33,7 @@
     </div>
 
     <!-- Chart canvases -->
-    <div class="p-5">
+    <div class="px-2 py-4 sm:p-5">
         {% if has_swap %}
         <div id="chart-panel-swap">
             <canvas id="swap-history-chart"></canvas>
@@ -187,14 +187,17 @@
 
     /* ── Standard chart (single y-axis) ── */
     function makeOptions(aspectRatio, xMin) {
-        const mobileAR = (aspectRatio || 3) > 2 ? 1.6 : aspectRatio;
+        const mobileAR = (aspectRatio || 3) > 2 ? 1.4 : aspectRatio;
         const ar = isMobile ? mobileAR : (aspectRatio || 3);
         const opts = {
             responsive: true,
             aspectRatio: ar,
             interaction: { mode: 'nearest', axis: 'x', intersect: false },
             plugins: {
-                legend: { labels: { usePointStyle: true, pointStyle: 'line', boxWidth: isMobile ? 14 : 20, font: { size: isMobile ? 10 : 11 } } },
+                legend: {
+                    position: isMobile ? 'bottom' : 'top',
+                    labels: { usePointStyle: true, pointStyle: 'line', boxWidth: isMobile ? 14 : 20, font: { size: isMobile ? 10 : 11 }, padding: isMobile ? 8 : 10 },
+                },
                 tooltip: { callbacks: tooltipCallbacks },
                 zoom: zoomConfig,
             },
@@ -275,6 +278,7 @@
                 interaction: { mode: 'nearest', axis: 'x', intersect: false },
                 plugins: {
                     legend: {
+                        position: isMobile ? 'bottom' : 'top',
                         labels: {
                             usePointStyle: true,
                             pointStyle: 'line',
@@ -306,14 +310,14 @@
                     ySwap: {
                         type: 'linear',
                         position: 'left',
-                        title: { display: true, text: 'Swap', color: COLORS.green + '99', font: { size: isMobile ? 9 : 10, weight: 'normal' } },
+                        title: { display: !isMobile, text: 'Swap', color: COLORS.green + '99', font: { size: isMobile ? 9 : 10, weight: 'normal' } },
                         grid: { color: '#1f293740' },
                         ticks: { callback: tickFmt, font: { size: isMobile ? 9 : 10 }, color: '#9ca3af80' },
                     },
                     yBank: {
                         type: 'linear',
                         position: 'right',
-                        title: { display: true, text: 'Est. LK eff.', color: COLORS.pink, font: { size: isMobile ? 9 : 10, weight: 'bold' } },
+                        title: { display: !isMobile, text: 'Est. LK eff.', color: COLORS.pink, font: { size: isMobile ? 9 : 10, weight: 'bold' } },
                         grid: { drawOnChartArea: false },
                         ticks: { callback: tickFmt, font: { size: isMobile ? 9 : 10 }, color: COLORS.pink },
                     },
