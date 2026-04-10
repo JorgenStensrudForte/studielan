@@ -840,54 +840,6 @@ async def api_bank_products_history(bound_years: int = 3, days: int = 365):
 
 # --- HTMX Partials ---
 
-@app.get("/partials/rates-overview", response_class=HTMLResponse)
-async def partial_rates_overview(request: Request):
-    """Combined rates overview: LK + Swap + Bank estimates."""
-    try:
-        lk_rates = await lanekassen.fetch_rates()
-    except Exception:
-        lk_rates = []
-
-    # Find the most recent period with actual fixed rates
-    lk_fixed = None
-    for r in lk_rates:
-        if r.fixed_3y is not None or r.fixed_5y is not None or r.fixed_10y is not None:
-            lk_fixed = r
-            break
-
-    try:
-        swap_rates_data = await seb.fetch_swap_rates()
-        await db.insert_swap_rates(swap_rates_data)
-    except Exception:
-        swap_rates_data = []
-
-    swap_history = {}
-    for tenor in ["3 Yr", "5 Yr", "10 Yr"]:
-        swap_history[tenor] = await db.get_swap_history(tenor, days=90)
-    swap_rows = _build_swap_rows(swap_rates_data, swap_history)
-
-    bank_rate_history = {}
-    for tenor in ["3 år", "5 år", "10 år"]:
-        bank_rate_history[tenor] = await db.get_bank_rate_history(tenor, days=500)
-
-    try:
-        products_by_tenor = await finansportalen.fetch_products_by_tenor(top_n=5)
-    except Exception:
-        products_by_tenor = {}
-    estimates = finansportalen.estimate_next_lk_rates(products_by_tenor, lk_fixed)
-    bank_rows = _build_bank_rows(estimates, bank_rate_history)
-
-    lk_current = lk_rates[0] if lk_rates else None
-
-    return templates.TemplateResponse("partials/rates_overview.html", {
-        "request": request,
-        "lanekassen": lk_fixed,
-        "lk_current": lk_current,
-        "swap_rows": swap_rows,
-        "bank_rows": bank_rows,
-    })
-
-
 @app.get("/partials/lanekassen", response_class=HTMLResponse)
 async def partial_lanekassen(request: Request):
     try:

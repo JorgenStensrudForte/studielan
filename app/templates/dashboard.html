@@ -217,15 +217,6 @@
 </div>
 {% endif %}
 
-<!-- Rates overview (unified) -->
-<div id="rates-overview-panel"
-     class="mb-4"
-     hx-get="/partials/rates-overview"
-     hx-trigger="every 60s"
-     hx-swap="innerHTML">
-    {% include "partials/rates_overview.html" %}
-</div>
-
 <!-- Swap history chart (full width) -->
 <div id="swap-chart-panel" class="mb-4">
     {% include "partials/swap_chart.html" %}
