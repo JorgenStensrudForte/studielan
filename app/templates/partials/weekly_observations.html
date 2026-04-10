@@ -1,0 +1,124 @@
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Ukentlige observasjoner (Finanstilsynets metodikk)</h2>
+        <span class="text-xs text-gray-500">{{ weekly_obs.month_label }}</span>
+    </div>
+    <p class="text-xs text-gray-600 mb-4">Basisrente = snitt av ukentlige onsdagsobservasjoner i observasjonsmåneden</p>
+
+    {% set tenors = ["3 år", "5 år", "10 år"] %}
+    {% set obs = weekly_obs %}
+    {% set has_data = false %}
+    {% for t in tenors %}
+        {% if obs.tenors[t] and obs.tenors[t].weeks %}
+            {% set has_data = true %}
+        {% endif %}
+    {% endfor %}
+
+    {% if has_data %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-gray-500 text-xs">
+                    <th class="text-left pb-2 pr-4">Uke</th>
+                    <th class="text-left pb-2 pr-2">Dato</th>
+                    {% for t in tenors %}
+                    <th class="text-right pb-2 pl-3" colspan="2">{{ t }}</th>
+                    {% endfor %}
+                </tr>
+                <tr class="text-gray-600 text-[10px]">
+                    <th></th>
+                    <th></th>
+                    {% for t in tenors %}
+                    <th class="text-right pb-1 pl-3">Snitt eff.</th>
+                    <th class="text-right pb-1 pl-1">LK nom.</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="text-gray-200">
+                {% for week_num in range(1, obs.wednesdays_total + 1) %}
+                <tr class="border-t border-gray-800/30">
+                    <td class="py-1.5 text-gray-500 text-xs">{{ week_num }}</td>
+                    <td class="py-1.5 text-xs text-gray-400">
+                        {% set found = false %}
+                        {% for t in tenors %}
+                            {% if not found %}
+                                {% for w in obs.tenors[t].weeks %}
+                                    {% if w.week == week_num and not found %}
+                                        {{ w.date[8:10] }}.{{ w.date[5:7] }}
+                                        {% set found = true %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if not found %}
+                            <span class="text-gray-700">-</span>
+                        {% endif %}
+                    </td>
+                    {% for t in tenors %}
+                        {% set week_data = namespace(found=false) %}
+                        {% for w in obs.tenors[t].weeks %}
+                            {% if w.week == week_num %}
+                                <td class="text-right font-mono text-xs pl-3">{{ "%.3f"|format(w.avg_top5_eff) }}%</td>
+                                <td class="text-right font-mono text-xs pl-1 text-emerald-400">{{ "%.3f"|format(w.lk_nom) }}%</td>
+                                {% set week_data.found = true %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if not week_data.found %}
+                            <td class="text-right font-mono text-xs pl-3 text-gray-700">-</td>
+                            <td class="text-right font-mono text-xs pl-1 text-gray-700">-</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="border-t-2 border-gray-700">
+                    <td class="py-2 text-xs text-gray-400 font-semibold" colspan="2">
+                        Snitt ({{ obs.wednesdays_observed }} av {{ obs.wednesdays_total }} uker)
+                    </td>
+                    {% for t in tenors %}
+                        {% set avg = obs.tenors[t].monthly_avg %}
+                        {% if avg %}
+                        <td class="text-right font-mono text-xs pl-3 text-gray-300 font-medium">{{ "%.3f"|format(avg.avg_top5_eff) }}%</td>
+                        <td class="text-right font-mono text-xs pl-1 text-emerald-300 font-semibold">{{ "%.3f"|format(avg.lk_nom) }}%</td>
+                        {% else %}
+                        <td class="text-right font-mono text-xs pl-3 text-gray-700">-</td>
+                        <td class="text-right font-mono text-xs pl-1 text-gray-700">-</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    {% if weekly_obs_prev %}
+    {% set prev = weekly_obs_prev %}
+    {% set prev_has_data = false %}
+    {% for t in tenors %}
+        {% if prev.tenors[t] and prev.tenors[t].monthly_avg %}
+            {% set prev_has_data = true %}
+        {% endif %}
+    {% endfor %}
+    {% if prev_has_data %}
+    <div class="mt-3 pt-3 border-t border-gray-800/50">
+        <p class="text-xs text-gray-500 mb-2">Forrige måned: {{ prev.month_label }} ({{ prev.wednesdays_observed }} uker)</p>
+        <div class="grid grid-cols-3 gap-3">
+            {% for t in tenors %}
+                {% set avg = prev.tenors[t].monthly_avg %}
+                {% if avg %}
+                <div>
+                    <span class="text-xs text-gray-500">{{ t }}</span>
+                    <p class="font-mono text-xs text-gray-400">Snitt eff: {{ "%.3f"|format(avg.avg_top5_eff) }}%</p>
+                    <p class="font-mono text-xs text-emerald-400/70">LK nom: {{ "%.3f"|format(avg.lk_nom) }}%</p>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% else %}
+    <p class="text-gray-500 text-sm">Ingen onsdagsobservasjoner ennå for {{ obs.month_label }}. Data samles daglig og onsdager brukes som ukentlige observasjoner.</p>
+    {% endif %}
+</div>

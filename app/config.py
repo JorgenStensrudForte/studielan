@@ -29,6 +29,15 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+
+def effective_to_nominal(eff_pct: float) -> float:
+    """Convert effective annual rate to nominal rate (monthly compounding).
+
+    Finanstilsynet formula: nominal = 12 × ((1 + eff/100)^(1/12) - 1) × 100
+    """
+    return 12 * ((1 + eff_pct / 100) ** (1 / 12) - 1) * 100
+
+
 # Søknadsvindu-måneder (annenhver: feb, apr, jun, aug, okt, des)
 WINDOW_MONTHS = [2, 4, 6, 8, 10, 12]
 

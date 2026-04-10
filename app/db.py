@@ -196,18 +196,17 @@ async def insert_bank_rate_estimates(
 
         products = products_by_tenor.get(years, [])[:5]
         nominal_rates = [p.nominal_rate for p in products]
-        effective_rates = [p.effective_rate for p in products]
 
-        avg_eff = sum(effective_rates) / len(effective_rates) if effective_rates else 0
-        est_lk_eff = round(avg_eff - 0.15, 3) if effective_rates else 0
-        std_dev_eff = round(stat.stdev(effective_rates), 3) if len(effective_rates) >= 2 else 0.0
+        avg_nom = sum(nominal_rates) / len(nominal_rates) if nominal_rates else 0
+        std_dev_nom = round(stat.stdev(nominal_rates), 3) if len(nominal_rates) >= 2 else 0.0
 
+        # EstimatedRate now carries both effective and nominal values
         rows.append((
             est.tenor, years,
-            est.avg_top5, avg_eff,
-            est.estimated_lk, est_lk_eff,
+            round(avg_nom, 3), est.avg_top5_effective,
+            est.estimated_lk, est.estimated_lk_effective,
             est.bank_count,
-            est.std_dev, std_dev_eff,
+            std_dev_nom, est.std_dev,
             est.current_lk, est.diff,
             observed_date,
         ))
@@ -262,6 +261,31 @@ async def get_bank_rate_history(tenor: str | None = None, days: int = 365) -> li
         return [dict(r) for r in rows]
     finally:
         await db.close()
+
+
+async def get_bank_estimates_for_month(year: int, month: int) -> list[dict]:
+    """Get all daily bank rate estimates for a specific month."""
+    start = f"{year}-{month:02d}-01"
+    if month == 12:
+        end = f"{year + 1}-01-01"
+    else:
+        end = f"{year}-{month + 1:02d}-01"
+
+    conn = await get_db()
+    try:
+        cursor = await conn.execute(
+            """SELECT tenor, bound_years, avg_top5_effective,
+                      estimated_lk_effective, estimated_lk_nominal,
+                      bank_count, observed_date
+               FROM bank_rate_estimates
+               WHERE observed_date >= ? AND observed_date < ?
+               ORDER BY observed_date ASC""",
+            (start, end),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
 
 
 async def get_bank_products_history(bound_years: int, days: int = 365) -> list[dict]:

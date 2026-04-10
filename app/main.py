@@ -16,6 +16,7 @@ from app.models import LanekassenRate, Savings, Signal, TenorSignal, EstimatedRa
 from app import db
 from app.services import seb, lanekassen, finansportalen, cbonds
 from app.services import finansportalen_history
+from app.services.weekly_avg import compute_weekly_observations
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -240,10 +241,10 @@ def _build_bank_rows(estimates: list, bank_rate_history: dict[str, list[dict]]) 
     for est in estimates:
         tenor = est.tenor
         history = bank_rate_history.get(tenor, [])
-        current_eff = est.avg_top5 + 0.15 - 0.15  # avg_top5 is nominal, we need effective
-        # Get current effective from history (latest point) or compute from estimates
+        current_eff = est.estimated_lk_effective
+        # Get current effective from history (latest point) if available
         if history:
-            current_eff = history[-1].get("estimated_lk_effective", 0)
+            current_eff = history[-1].get("estimated_lk_effective", current_eff)
         rows.append({
             "tenor": tenor,
             "rate": round(current_eff, 3),
@@ -660,6 +661,21 @@ async def _fetch_all_data(
     # Bank rate summary rows (like swap_rows but for Finansportalen effective rates)
     bank_rows = _build_bank_rows(estimates, bank_rate_history)
 
+    # Weekly observations (Finanstilsynets methodology: Wednesday snapshots, monthly average)
+    today = date.today()
+    weekly_obs = None
+    weekly_obs_prev = None
+    try:
+        monthly_rows = await db.get_bank_estimates_for_month(today.year, today.month)
+        weekly_obs = compute_weekly_observations(today.year, today.month, monthly_rows)
+        # Also compute previous month for comparison
+        prev_month = today.month - 1 if today.month > 1 else 12
+        prev_year = today.year if today.month > 1 else today.year - 1
+        prev_rows = await db.get_bank_estimates_for_month(prev_year, prev_month)
+        weekly_obs_prev = compute_weekly_observations(prev_year, prev_month, prev_rows)
+    except Exception as e:
+        logger.error(f"Weekly observations failed: {e}")
+
     # Savings (use lk_fixed which has actual fixed rates for comparison)
     savings = _compute_savings(lk_fixed, loan_amount, estimates) if lk_fixed else []
 
@@ -705,6 +721,8 @@ async def _fetch_all_data(
         "bank_rate_history": bank_rate_history,
         "has_bank_history": has_bank_history,
         "bank_rows": bank_rows,
+        "weekly_obs": weekly_obs,
+        "weekly_obs_prev": weekly_obs_prev,
         "estimates": estimates,
         "savings": savings,
         "signal": signal,
@@ -771,7 +789,8 @@ async def api_dashboard(
         },
         "banker_updated_at": data["banker_updated_at"].isoformat() if data.get("banker_updated_at") else None,
         "estimates": [
-            {"tenor": e.tenor, "avg_top5": e.avg_top5, "estimated_lk": e.estimated_lk,
+            {"tenor": e.tenor, "avg_top5_effective": e.avg_top5_effective,
+             "estimated_lk": e.estimated_lk, "estimated_lk_effective": e.estimated_lk_effective,
              "current_lk": e.current_lk, "diff": e.diff, "std_dev": e.std_dev}
             for e in data["estimates"]
         ],

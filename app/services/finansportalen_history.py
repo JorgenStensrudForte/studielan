@@ -3,7 +3,7 @@
 API endpoints:
 - GET /historical/mortgage/banks?types[0]=standardlån
 - GET /historical/mortgage/products?bankIds[0]=X&types[0]=standardlån
-- GET /historical/mortgage?loanAmount=3000000&paymentPeriod=25&productIds[0]=X&purchasePrice=4000000
+- GET /historical/mortgage?loanAmount=1500000&paymentPeriod=30&productIds[0]=X&purchasePrice=3000000
 
 The historical API returns effectiveInterestRate only (not nominal).
 We store effective rates and set nominal = 0 for backfilled data.
@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 
 import httpx
 
+from app.config import effective_to_nominal
 from app.models import BankProduct, EstimatedRate
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ for bank, tenors in PRODUCT_MAP.items():
 
 async def fetch_historical_products() -> list[dict]:
     """Fetch historical data for all tracked products from Finansportalen."""
-    params = {"loanAmount": 3_000_000, "paymentPeriod": 25, "purchasePrice": 4_000_000}
+    params = {"loanAmount": 1_500_000, "paymentPeriod": 30, "purchasePrice": 3_000_000}
     for i, pid in enumerate(ALL_PRODUCT_IDS):
         params[f"productIds[{i}]"] = pid
 
@@ -158,13 +159,15 @@ def compute_historical_estimates(
             top_products[years] = top
             eff_rates = [p.effective_rate for p in top]
             avg_eff = sum(eff_rates) / len(eff_rates)
-            estimated_lk = round(avg_eff - margin, 3)
+            lk_eff = avg_eff - margin
+            lk_nom = effective_to_nominal(lk_eff)
             std_dev = round(statistics.stdev(eff_rates), 3) if len(eff_rates) >= 2 else 0.0
 
             estimates.append(EstimatedRate(
                 tenor=tenor_labels[years],
-                avg_top5=round(avg_eff, 3),  # effective (not nominal) for historical
-                estimated_lk=estimated_lk,
+                avg_top5_effective=round(avg_eff, 3),
+                estimated_lk=round(lk_nom, 3),
+                estimated_lk_effective=round(lk_eff, 3),
                 current_lk=None,
                 diff=None,
                 bank_count=len(top),

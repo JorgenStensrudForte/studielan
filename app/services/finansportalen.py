@@ -2,15 +2,17 @@ import statistics
 
 import httpx
 
-from app.config import settings
+from app.config import settings, effective_to_nominal
 from app.models import BankProduct, EstimatedRate
 
+# Finanstilsynets parametere for basisrente-beregning:
+# 1,5M lån, 3M bolig (50% belåning), 30 år nedbetalingstid, alder 45
 BASE_PARAMS = {
     "interestType": "Fast",
-    "loanAmount": 3_000_000,
-    "purchasePrice": 4_000_000,
-    "paymentPeriod": 25,
-    "age": 30,
+    "loanAmount": 1_500_000,
+    "purchasePrice": 3_000_000,
+    "paymentPeriod": 30,
+    "age": 45,
     "loanType[0]": "standardlån",
     "isSalaryRequired": "false",
     "membershipType[0]": "None",
@@ -63,8 +65,8 @@ async def fetch_products_by_tenor(top_n: int = 5) -> dict[int, list[BankProduct]
     result = {}
     for years in (3, 5, 10):
         tenor_products = by_tenor.get(years, [])
-        # Keep one consistent basis against Lånekassen rates (nominal).
-        tenor_products.sort(key=lambda p: p.nominal_rate)
+        # Finanstilsynet rangerer etter effektiv rente
+        tenor_products.sort(key=lambda p: p.effective_rate)
         result[years] = tenor_products[:top_n]
 
     return result
@@ -74,7 +76,12 @@ def estimate_next_lk_rates(
     products_by_tenor: dict[int, list[BankProduct]],
     current_lk: "LanekassenRate | None" = None,
 ) -> list[EstimatedRate]:
-    """Estimate next Lånekassen rates: avg top-5 nominal rate - 0.15pp."""
+    """Estimate next Lånekassen rates using Finanstilsynets methodology.
+
+    1. Average top-5 effective rates
+    2. Subtract 0.15pp → LK effective rate
+    3. Convert effective → nominal for comparison with current LK rates
+    """
     from app.models import LanekassenRate  # avoid circular
 
     lk_attr_map = {3: "fixed_3y", 5: "fixed_5y", 10: "fixed_10y"}
@@ -87,21 +94,23 @@ def estimate_next_lk_rates(
         if not top5:
             continue
 
-        rates = [p.nominal_rate for p in top5]
-        avg = sum(rates) / len(rates)
-        estimated_lk = round(avg - settings.lanekassen_margin, 3)
-        std_dev = round(statistics.stdev(rates), 3) if len(rates) >= 2 else 0.0
+        eff_rates = [p.effective_rate for p in top5]
+        avg_eff = sum(eff_rates) / len(eff_rates)
+        lk_eff = avg_eff - settings.lanekassen_margin
+        lk_nom = effective_to_nominal(lk_eff)
+        std_dev = round(statistics.stdev(eff_rates), 3) if len(eff_rates) >= 2 else 0.0
 
         current = None
         if current_lk:
             current = getattr(current_lk, lk_attr_map[years], None)
 
-        diff = round(estimated_lk - current, 3) if current is not None else None
+        diff = round(round(lk_nom, 3) - current, 3) if current is not None else None
 
         estimates.append(EstimatedRate(
             tenor=tenor_labels[years],
-            avg_top5=round(avg, 3),
-            estimated_lk=estimated_lk,
+            avg_top5_effective=round(avg_eff, 3),
+            estimated_lk=round(lk_nom, 3),
+            estimated_lk_effective=round(lk_eff, 3),
             current_lk=current,
             diff=diff,
             bank_count=len(top5),

@@ -240,6 +240,12 @@
     {% include "partials/banker.html" %}
 </div>
 
+{% if weekly_obs %}
+<div class="mb-4">
+    {% include "partials/weekly_observations.html" %}
+</div>
+{% endif %}
+
 <!-- Bootstrap bank history -->
 {% if not has_bank_history %}
 <div class="mb-4 bg-amber-900/30 border border-amber-700/50 rounded-xl p-4 text-sm text-amber-300">

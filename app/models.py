@@ -32,14 +32,18 @@ class BankProduct:
 
 @dataclass
 class EstimatedRate:
-    """Estimert neste Lånekassen-rente basert på topp-5 bankrenter."""
+    """Estimert neste Lånekassen-rente basert på topp-5 bankrenter (Finanstilsynets metodikk).
+
+    Beregning: snitt topp-5 effektive renter → -0.15pp = LK effektiv → konverter til nominell.
+    """
     tenor: str  # "3 år", "5 år", "10 år"
-    avg_top5: float  # snitt topp-5 nominelle bankrenter
-    estimated_lk: float  # avg_top5 - 0.15pp
-    current_lk: float | None  # nåværende Lånekassen-rente for denne tenoren
+    avg_top5_effective: float  # snitt topp-5 effektive bankrenter
+    estimated_lk: float  # estimert neste LK nominell rente (konvertert fra effektiv)
+    estimated_lk_effective: float  # estimert neste LK effektiv rente (avg - 0.15pp)
+    current_lk: float | None  # nåværende Lånekassen-rente for denne tenoren (nominell)
     diff: float | None  # estimated_lk - current_lk (positiv = renta forventes opp)
     bank_count: int = 0  # antall banker i grunnlaget
-    std_dev: float = 0.0  # standardavvik i topp-5 bankrenter (spredning)
+    std_dev: float = 0.0  # standardavvik i topp-5 effektive bankrenter
 
 
 @dataclass

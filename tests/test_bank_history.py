@@ -28,8 +28,8 @@ SAMPLE_PRODUCTS = {
 }
 
 SAMPLE_ESTIMATES = [
-    EstimatedRate(tenor="3 år", avg_top5=4.96, estimated_lk=4.81, current_lk=4.736, diff=0.074, bank_count=3, std_dev=0.05),
-    EstimatedRate(tenor="5 år", avg_top5=4.87, estimated_lk=4.72, current_lk=4.745, diff=-0.025, bank_count=2, std_dev=0.04),
+    EstimatedRate(tenor="3 år", avg_top5_effective=5.08, estimated_lk=4.81, estimated_lk_effective=4.93, current_lk=4.736, diff=0.074, bank_count=3, std_dev=0.05),
+    EstimatedRate(tenor="5 år", avg_top5_effective=5.01, estimated_lk=4.72, estimated_lk_effective=4.86, current_lk=4.745, diff=-0.025, bank_count=2, std_dev=0.04),
 ]
 
 
@@ -55,10 +55,11 @@ async def test_insert_and_query_bank_estimates(test_db):
     row = history[0]
     assert row["tenor"] == "3 år"
     assert row["bound_years"] == 3
-    assert row["avg_top5_nominal"] == 4.96
-    assert row["avg_top5_effective"] > 0
+    # avg_top5_nominal is computed from product nominal_rates: (4.89+4.93+4.99)/3 = 4.937
+    assert abs(row["avg_top5_nominal"] - 4.937) < 0.01
+    assert row["avg_top5_effective"] == 5.08
     assert row["estimated_lk_nominal"] == 4.81
-    assert row["estimated_lk_effective"] > 0
+    assert row["estimated_lk_effective"] == 4.93
     assert row["bank_count"] == 3
     assert row["observed_date"] == "2026-03-05"
 
