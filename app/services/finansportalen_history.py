@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 HISTORICAL_BASE = "https://finans-api.forbrukerradet.no/historical/mortgage"
 
 # Standard fastrente product IDs per bank (no "ung", "LO", "Premium", "SAGA" etc.)
+# Matches the banks Finanstilsynet uses for basisrente calculation.
 PRODUCT_MAP = {
     "Sbanken (DNB Bank ASA)": {"3": 153084, "5": 153085, "10": 153086},
     "Bien Sparebank ASA": {"3": 156119, "5": 156118, "10": 156117},
@@ -33,6 +34,12 @@ PRODUCT_MAP = {
     "SpareBank 1 Nord-Norge": {"3": 156112, "5": 156111, "10": 156113},
     "Sparebanken Øst": {"3": 156133, "5": 156134, "10": 156135},
     "NORDEA BANK ABP, FILIAL I NORGE": {"3": 155955, "5": 155950, "10": 155956},
+    "KLP Banken AS": {"3": 156748, "5": 156749, "10": 156750},
+    "Storebrand Bank ASA": {"3": 156978, "5": 156977, "10": 156976},
+    "SpareBank 1 Sogn og Fjordane": {"3": 16202, "5": 156008, "10": 156007},
+    "SpareBank 1 Gudbrandsdal": {"3": 156463, "5": 156464, "10": 156465},
+    "SpareBank 1 SMN": {"3": 156682, "5": 156681, "10": 156680},
+    "Romerike Sparebank": {"3": 157164, "5": 157163, "10": 156444},
 }
 
 ALL_PRODUCT_IDS = []
